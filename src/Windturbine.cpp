@@ -1,0 +1,243 @@
+#include <arduino.h>
+
+// For LCD display
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x3F, 16, 2);
+
+// For SD card
+#include <SPI.h>
+#include <SD.h>
+File myFile;
+
+// For timekeeping
+#include <Time.h>
+#include <TimeLib.h>
+#define TIME_HEADER  "T"   // Header tag for serial time sync message
+#define TIME_REQUEST  7    // ASCII bell character requests a time sync message
+
+// For normal code
+#define sense_manometer 2
+#define sense_turbine 3
+#define current_sense A0
+#define voltage_sense A1
+#define StepperDriverPot A3
+#define Stepper_EN 7
+// #define Stepper_CW 6
+#define Stepper_CLK 5
+
+volatile uint16_t count_manometer = 0;
+volatile uint16_t count_turbine = 0;
+// boolean isHigh_manometer = false;
+// boolean isHigh_turbine = false;
+uint32_t preTime = 0;
+uint32_t curTime = 0;
+uint16_t diff = 0;
+uint8_t tickRate = 1;     // Display update rate in Hz
+float WindSpeedToFillBar = 15;   // m/s
+
+// Declare functions
+String formatTime(uint32_t t);
+String addTrailingSpaces(String text, int TotalLength = 16);
+void processSyncMessage();
+time_t requestSync();
+void manometerInterrupt();
+void turbineInterrupt();
+
+void setup() {
+  pinMode(sense_manometer, INPUT);
+  pinMode(sense_turbine, INPUT);
+  pinMode(current_sense, INPUT);
+  pinMode(voltage_sense, INPUT);
+  pinMode(StepperDriverPot, INPUT);
+  pinMode(Stepper_EN, OUTPUT);
+  // pinMode(Stepper_CW, OUTPUT);
+  pinMode(Stepper_CLK, OUTPUT);
+  Serial.begin(9600);
+
+  // Initiate lcd connection
+  lcd.begin();
+  // Turn on backlight
+  lcd.backlight();
+
+  Serial.print("Initializing SD card...");
+  if (!SD.begin(10)) {
+    Serial.println("initialization failed!");
+    return;
+  }
+  Serial.println("initialization done.");
+
+  myFile = SD.open("log.txt", FILE_WRITE);
+  myFile.println("---------------------------------");
+  myFile.println("            New Log");
+  myFile.println("---------------------------------");
+  myFile.println("DD:MM:YYYY HH:MM:SS; v (m/s)");
+  myFile.println("----------------------------");
+  myFile.close();
+
+  // Sync time with computer
+  setSyncProvider( requestSync );  //set function to call when sync required
+  Serial.println("Waiting for sync message");
+
+  // Add interrupts
+  attachInterrupt(digitalPinToInterrupt(sense_manometer), manometerInterrupt, RISING );
+  attachInterrupt(digitalPinToInterrupt(sense_turbine), turbineInterrupt, RISING );
+}
+
+void loop() {
+    // ===================
+    //      Sync time
+    // ===================
+    if (Serial.available()) {
+      processSyncMessage();
+    }
+
+    // ==========================
+    //      count the pulses
+    // ==========================
+    // uint16_t senseValue_manometer = digitalRead(sense_manometer);
+    // if (senseValue_manometer == HIGH and isHigh_manometer == false) {
+    //     isHigh_manometer = true;
+    // }
+    // if (senseValue_manometer == LOW and isHigh_manometer == true) {
+    //     isHigh_manometer = false;
+    //     count_manometer += 1;
+    // }
+    //
+    // uint16_t senseValue_turbine = digitalRead(sense_turbine);
+    // if (senseValue_turbine == HIGH and isHigh_turbine == false) {
+    //     isHigh_turbine = true;
+    // }
+    // if (senseValue_turbine == LOW and isHigh_turbine == true) {
+    //     isHigh_turbine = false;
+    //     count_turbine += 1;
+    // }
+
+    // ===============================
+    //      Stepper drive control
+    // ===============================
+    uint16_t potVal = analogRead(StepperDriverPot);
+    if (potVal < 15) {
+        digitalWrite(Stepper_EN, HIGH);
+    } else {
+        digitalWrite(Stepper_EN, LOW);
+    }
+
+    // digitalWrite(Stepper_CW, LOW);
+    int speed = potVal * 30;
+    tone(Stepper_CLK, speed);
+    Serial.println(speed);
+
+    //Serial.println(1.0 * speed / 1600 * 60 * 3);
+
+    // ==========================
+    //      Process the data
+    // ==========================
+    curTime = millis();
+    diff = curTime - preTime;
+    if (diff >= 1000 / tickRate) {
+        preTime = curTime;
+
+        // -------------------------
+        //      Calc wind speed
+        // -------------------------
+        float WSpeed = 0;
+        if (count_manometer != 0) {
+            WSpeed = (count_manometer * tickRate * 3) * 0.0306 + 1.22;
+        }
+
+        // ------------------------------------------
+        //      Display the windspeed on the LCD
+        // ------------------------------------------
+        lcd.setCursor(0,0);
+        lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
+        lcd.setCursor(8,0);
+        lcd.print(addTrailingSpaces("RPM:" + String(count_turbine * 3 * tickRate), 8));
+        // String bar = "";
+        // for (int i = 0; i < floor(WSpeed * 16 / WindSpeedToFillBar ); i++) {
+        //   bar += char(255);
+        // }
+        // lcd.setCursor(0,1);
+        // lcd.print(addTrailingSpaces(bar));
+        lcd.setCursor(0,1);
+        lcd.print(addTrailingSpaces("U:" + String(analogRead(voltage_sense) * 0.0171 + 0.0171) + "V", 8));
+        lcd.setCursor(8,1);
+        lcd.print(addTrailingSpaces("I:" + String(analogRead(current_sense) * 0.0385 - 19.8) + "A", 8)); //0.0263 - 13.415
+
+        // --------------------------------------
+        //      Store a line in the log file
+        // --------------------------------------
+        myFile = SD.open("log.txt", FILE_WRITE);
+        if (myFile) {
+            myFile.println(formatTime(curTime) + String(WSpeed));
+            Serial.println(formatTime(curTime) + String(WSpeed));
+        } else {
+            Serial.println("error opening test.txt");
+        }
+        myFile.close();
+
+        count_manometer = 0;
+        count_turbine = 0;
+    }
+}
+
+String formatTime(uint32_t t) {
+    String res = "";
+
+    if ( day() < 10 ) { res += "0"; }
+    res += String( day() ) + "/";
+
+    if ( month() < 10 ) { res += "0"; }
+    res += String( month() ) + "/";
+
+    if ( year() < 10 ) { res += "000"; }
+    else if ( year() < 100 ) { res += "00"; }
+    else if ( year() < 1000 ) { res += "0"; }
+    res += String( year() ) + " ";
+
+    if ( hour() < 10 ) { res += "0"; }
+    res += String( hour() ) + ":";
+
+    if ( minute() < 10 ) { res += "0"; }
+    res += String( minute() ) + ":";
+
+    if ( second() < 10 ) { res += "0"; }
+    res += String( second() ) + "; ";
+
+    return res;
+}
+
+String addTrailingSpaces(String text, int TotalLength) {
+    String res = text;
+    int blocksToAdd = TotalLength - text.length();
+    if (blocksToAdd < 0) {blocksToAdd = 0;}
+    for (uint8_t i = 0; i < blocksToAdd; i++) {
+        res += " ";
+    }
+    return res;
+}
+
+void processSyncMessage() {
+  unsigned long pctime;
+  const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013
+
+    if(Serial.find(TIME_HEADER)) {
+        pctime = Serial.parseInt();
+        if( pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
+            setTime(pctime); // Sync Arduino clock to the time received on the serial port
+        }
+    }
+}
+
+time_t requestSync() {
+    Serial.write(TIME_REQUEST);
+    return 0; // the time will be sent later in response to serial mesg
+}
+
+void manometerInterrupt() {
+    count_manometer += 1;
+}
+
+void turbineInterrupt() {
+    count_turbine += 1;
+}
