@@ -1,22 +1,30 @@
 #include <arduino.h>
 
-// For LCD display
+// -------------------------
+//      For LCD display
+// -------------------------
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 LiquidCrystal_I2C lcd(0x3F, 16, 2);
 
-// For SD card
+// ---------------------
+//      For SD card
+// ---------------------
 #include <SPI.h>
 #include <SD.h>
 File myFile;
 
-// For timekeeping
+// -------------------------
+//      For timekeeping
+// -------------------------
 #include <Time.h>
 #include <TimeLib.h>
 #define TIME_HEADER  "T"   // Header tag for serial time sync message
 #define TIME_REQUEST  7    // ASCII bell character requests a time sync message
 
-// For normal code
+// ---------------------
+//      Define pins
+// ---------------------
 #define sense_manometer 2
 #define sense_turbine 3
 #define current_sense A0
@@ -26,6 +34,9 @@ File myFile;
 // #define Stepper_CW 6
 #define Stepper_CLK 5
 
+// ----------------------------------
+//      Declare global variables
+// ----------------------------------
 volatile uint16_t count_manometer = 0;
 volatile uint16_t count_turbine = 0;
 // boolean isHigh_manometer = false;
@@ -36,7 +47,9 @@ uint16_t diff = 0;
 uint8_t tickRate = 1;     // Display update rate in Hz
 float WindSpeedToFillBar = 15;   // m/s
 
-// Declare functions
+// ---------------------------
+//      Declare functions
+// ---------------------------
 String formatTime(uint32_t t);
 String addTrailingSpaces(String text, int TotalLength = 16);
 void processSyncMessage();
@@ -44,46 +57,53 @@ time_t requestSync();
 void manometerInterrupt();
 void turbineInterrupt();
 
+// ---------------
+//      Setup
+// ---------------
 void setup() {
-  pinMode(sense_manometer, INPUT);
-  pinMode(sense_turbine, INPUT);
-  pinMode(current_sense, INPUT);
-  pinMode(voltage_sense, INPUT);
-  pinMode(StepperDriverPot, INPUT);
-  pinMode(Stepper_EN, OUTPUT);
-  // pinMode(Stepper_CW, OUTPUT);
-  pinMode(Stepper_CLK, OUTPUT);
-  Serial.begin(9600);
+    pinMode(sense_manometer, INPUT);
+    pinMode(sense_turbine, INPUT);
+    pinMode(current_sense, INPUT);
+    pinMode(voltage_sense, INPUT);
+    pinMode(StepperDriverPot, INPUT);
+    pinMode(Stepper_EN, OUTPUT);
+    // pinMode(Stepper_CW, OUTPUT);
+    pinMode(Stepper_CLK, OUTPUT);
+    Serial.begin(9600);
 
-  // Initiate lcd connection
-  lcd.begin();
-  // Turn on backlight
-  lcd.backlight();
+    //---- Initiate lcd connection ----//
+    lcd.begin();
+    //---- Turn on backlight ----//
+    lcd.backlight();
 
-  Serial.print("Initializing SD card...");
-  if (!SD.begin(10)) {
-    Serial.println("initialization failed!");
-    return;
-  }
-  Serial.println("initialization done.");
+    //---- Initialise SD card ----//
+    Serial.print("Initializing SD card...");
+    if (!SD.begin(10)) {
+        Serial.println("initialization failed!");
+        return;
+    }
+    Serial.println("initialization done.");
 
-  myFile = SD.open("log.txt", FILE_WRITE);
-  myFile.println("---------------------------------");
-  myFile.println("            New Log");
-  myFile.println("---------------------------------");
-  myFile.println("DD:MM:YYYY HH:MM:SS; v (m/s)");
-  myFile.println("----------------------------");
-  myFile.close();
+    myFile = SD.open("log.txt", FILE_WRITE);
+    myFile.println("---------------------------------");
+    myFile.println("            New Log");
+    myFile.println("---------------------------------");
+    myFile.println("DD:MM:YYYY HH:MM:SS; v (m/s)");
+    myFile.println("----------------------------");
+    myFile.close();
 
-  // Sync time with computer
-  setSyncProvider( requestSync );  //set function to call when sync required
-  Serial.println("Waiting for sync message");
+    //---- Sync time with computer ----//
+    setSyncProvider( requestSync );  //set function to call when sync required
+    Serial.println("Waiting for sync message");
 
-  // Add interrupts
-  attachInterrupt(digitalPinToInterrupt(sense_manometer), manometerInterrupt, RISING );
-  attachInterrupt(digitalPinToInterrupt(sense_turbine), turbineInterrupt, RISING );
+    //---- Add interrupts ----//
+    attachInterrupt(digitalPinToInterrupt(sense_manometer), manometerInterrupt, RISING );
+    attachInterrupt(digitalPinToInterrupt(sense_turbine), turbineInterrupt, RISING );
 }
 
+// --------------
+//      Loop
+// --------------
 void loop() {
     // ===================
     //      Sync time
@@ -181,6 +201,9 @@ void loop() {
     }
 }
 
+// --------------------------
+//      Helper functions
+// --------------------------
 String formatTime(uint32_t t) {
     String res = "";
 
