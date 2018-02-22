@@ -25,14 +25,24 @@ File myFile;
 // ---------------------
 //      Define pins
 // ---------------------
+// Reserved pins (TX, RX): 0, 1
+// Reserved pins (SD card): 10, 11, 12, 13
+// Reserved pins (Display): A4, A5
+// interrupt pins: 2, 3
+// PWM pins: 3, 5, 6, 9, 10, 11
 #define sense_manometer 2
 #define sense_turbine 3
-#define current_sense A0
-#define voltage_sense A1
-#define StepperDriverPot A3
-#define Stepper_EN 7
+#define current_sense_turbine A2
+#define voltage_sense_turbine A3
+#define current_sense_output A0
+#define voltage_sense_battery A1
+#define turbine_to_bat_switch 6
+#define battery_output_switch 5
+#define dummy_load_switch 4
+// #define StepperDriverPot A3
+#define Stepper_EN 8
 // #define Stepper_CW 6
-#define Stepper_CLK 5
+#define Stepper_CLK 9
 
 // ----------------------------------
 //      Declare global variables
@@ -63,9 +73,14 @@ void turbineInterrupt();
 void setup() {
     pinMode(sense_manometer, INPUT);
     pinMode(sense_turbine, INPUT);
-    pinMode(current_sense, INPUT);
-    pinMode(voltage_sense, INPUT);
-    pinMode(StepperDriverPot, INPUT);
+    // pinMode(StepperDriverPot, INPUT);
+    pinMode(current_sense_turbine, INPUT);
+    pinMode(voltage_sense_turbine, INPUT);
+    pinMode(current_sense_output, INPUT);
+    pinMode(voltage_sense_battery, INPUT);
+    pinMode(turbine_to_bat_switch, OUTPUT);
+    pinMode(battery_output_switch, OUTPUT);
+    pinMode(dummy_load_switch, OUTPUT);
     pinMode(Stepper_EN, OUTPUT);
     // pinMode(Stepper_CW, OUTPUT);
     pinMode(Stepper_CLK, OUTPUT);
@@ -136,17 +151,17 @@ void loop() {
     // ===============================
     //      Stepper drive control
     // ===============================
-    uint16_t potVal = analogRead(StepperDriverPot);
-    if (potVal < 15) {
-        digitalWrite(Stepper_EN, HIGH);
-    } else {
-        digitalWrite(Stepper_EN, LOW);
-    }
+    // uint16_t potVal = analogRead(StepperDriverPot);
+    // if (potVal < 15) {
+    //     digitalWrite(Stepper_EN, HIGH);
+    // } else {
+    //     digitalWrite(Stepper_EN, LOW);
+    // }
 
     // digitalWrite(Stepper_CW, LOW);
-    int speed = potVal * 30;
-    tone(Stepper_CLK, speed);
-    Serial.println(speed);
+    // int speed = potVal * 30;
+    // tone(Stepper_CLK, speed);
+    // Serial.println(speed);
 
     //Serial.println(1.0 * speed / 1600 * 60 * 3);
 
@@ -163,26 +178,43 @@ void loop() {
         // -------------------------
         float WSpeed = 0;
         if (count_manometer != 0) {
-            WSpeed = (count_manometer * tickRate * 3) * 0.0306 + 1.22;
+            WSpeed = (count_manometer * tickRate * 3) * 0.0306 - 1.22;
         }
+
+        // -------------------------------------
+        //      Measure voltage and current
+        // -------------------------------------
+        digitalWrite(turbine_to_bat_switch, HIGH);
+        digitalWrite(battery_output_switch, LOW);
+        digitalWrite(dummy_load_switch, LOW);
+        double turbine_voltage = abs(analogRead(voltage_sense_turbine) * 0.0311 - 0.0309);
+        double turbine_current = abs(analogRead(current_sense_turbine) * 0.00417 - 0.14326);
+        double battery_voltage = abs(analogRead(voltage_sense_battery) * 0.0315 - 0.0586);
+        double output_current = abs(analogRead(current_sense_output) * 0.00460 - 0.16617);
 
         // ------------------------------------------
         //      Display the windspeed on the LCD
         // ------------------------------------------
-        lcd.setCursor(0,0);
-        lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
-        lcd.setCursor(8,0);
-        lcd.print(addTrailingSpaces("RPM:" + String(count_turbine * 3 * tickRate), 8));
+        // lcd.setCursor(0,0);
+        // lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
+        // lcd.setCursor(8,0);
+        // lcd.print(addTrailingSpaces("RPM:" + String(count_turbine * 3 * tickRate), 8));
+
         // String bar = "";
         // for (int i = 0; i < floor(WSpeed * 16 / WindSpeedToFillBar ); i++) {
         //   bar += char(255);
         // }
         // lcd.setCursor(0,1);
         // lcd.print(addTrailingSpaces(bar));
+
+        lcd.setCursor(0,0);
+        lcd.print(addTrailingSpaces("U1:" + String(turbine_voltage), 8));
+        lcd.setCursor(8,0);
+        lcd.print(addTrailingSpaces("I1:" + String(turbine_current), 8));
         lcd.setCursor(0,1);
-        lcd.print(addTrailingSpaces("U:" + String(analogRead(voltage_sense) * 0.0171 + 0.0171) + "V", 8));
+        lcd.print(addTrailingSpaces("U2:" + String(battery_voltage), 8));
         lcd.setCursor(8,1);
-        lcd.print(addTrailingSpaces("I:" + String(analogRead(current_sense) * 0.0385 - 19.8) + "A", 8)); //0.0263 - 13.415
+        lcd.print(addTrailingSpaces("I2:" + String(output_current), 8));
 
         // --------------------------------------
         //      Store a line in the log file
@@ -196,6 +228,9 @@ void loop() {
         }
         myFile.close();
 
+        // ---------------------------------
+        //      Reset counter variables
+        // ---------------------------------
         count_manometer = 0;
         count_turbine = 0;
     }
