@@ -49,12 +49,10 @@ File myFile;
 // ----------------------------------
 volatile uint16_t count_manometer = 0;
 volatile uint16_t count_turbine = 0;
-// boolean isHigh_manometer = false;
-// boolean isHigh_turbine = false;
 uint32_t preTime = 0;
 uint32_t curTime = 0;
 uint16_t diff = 0;
-uint8_t tickRate = 1;     // Display update rate in Hz
+uint8_t tickRate = 1000;     // Display update rate in ms
 float WindSpeedToFillBar = 15;   // m/s
 
 // ---------------------------
@@ -73,7 +71,6 @@ void turbineInterrupt();
 void setup() {
     pinMode(sense_manometer, INPUT);
     pinMode(sense_turbine, INPUT);
-    // pinMode(StepperDriverPot, INPUT);
     pinMode(current_sense_turbine, INPUT);
     pinMode(voltage_sense_turbine, INPUT);
     pinMode(current_sense_output, INPUT);
@@ -82,7 +79,6 @@ void setup() {
     pinMode(battery_output_switch, OUTPUT);
     pinMode(dummy_load_switch, OUTPUT);
     pinMode(Stepper_EN, OUTPUT);
-    // pinMode(Stepper_CW, OUTPUT);
     pinMode(Stepper_CLK, OUTPUT);
     Serial.begin(9600);
 
@@ -127,27 +123,6 @@ void loop() {
       processSyncMessage();
     }
 
-    // ==========================
-    //      count the pulses
-    // ==========================
-    // uint16_t senseValue_manometer = digitalRead(sense_manometer);
-    // if (senseValue_manometer == HIGH and isHigh_manometer == false) {
-    //     isHigh_manometer = true;
-    // }
-    // if (senseValue_manometer == LOW and isHigh_manometer == true) {
-    //     isHigh_manometer = false;
-    //     count_manometer += 1;
-    // }
-    //
-    // uint16_t senseValue_turbine = digitalRead(sense_turbine);
-    // if (senseValue_turbine == HIGH and isHigh_turbine == false) {
-    //     isHigh_turbine = true;
-    // }
-    // if (senseValue_turbine == LOW and isHigh_turbine == true) {
-    //     isHigh_turbine = false;
-    //     count_turbine += 1;
-    // }
-
     // ===============================
     //      Stepper drive control
     // ===============================
@@ -165,12 +140,12 @@ void loop() {
 
     //Serial.println(1.0 * speed / 1600 * 60 * 3);
 
-    // ==========================
-    //      Process the data
-    // ==========================
+    // ======================
+    //      Process data
+    // ======================
     curTime = millis();
     diff = curTime - preTime;
-    if (diff >= 1000 / tickRate) {
+    if (diff >= tickRate) {
         preTime = curTime;
 
         // -------------------------
@@ -184,17 +159,26 @@ void loop() {
         // -------------------------------------
         //      Measure voltage and current
         // -------------------------------------
-        digitalWrite(turbine_to_bat_switch, HIGH);
-        digitalWrite(battery_output_switch, LOW);
-        digitalWrite(dummy_load_switch, LOW);
         double turbine_voltage = abs(analogRead(voltage_sense_turbine) * 0.0311 - 0.0309);
         double turbine_current = abs(analogRead(current_sense_turbine) * 0.00417 - 0.14326);
         double battery_voltage = abs(analogRead(voltage_sense_battery) * 0.0315 - 0.0586);
         double output_current = abs(analogRead(current_sense_output) * 0.00460 - 0.16617);
 
-        // ------------------------------------------
-        //      Display the windspeed on the LCD
-        // ------------------------------------------
+        // ---------------------------------
+        //      Control battery charger
+        // ---------------------------------
+        // digitalWrite(turbine_to_bat_switch, LOW);
+        // digitalWrite(battery_output_switch, LOW);
+        // digitalWrite(dummy_load_switch, LOW);
+        if (turbine_voltage > 11.5 && battery_voltage < 13) {
+            
+        } else {
+            digitalWrite(turbine_to_bat_switch, LOW);
+        }
+
+        // ---------------------------------
+        //      Display data on the LCD
+        // ---------------------------------
         // lcd.setCursor(0,0);
         // lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
         // lcd.setCursor(8,0);
