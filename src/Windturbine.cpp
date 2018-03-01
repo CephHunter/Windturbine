@@ -54,7 +54,7 @@ uint32_t curTime = 0;
 uint16_t diff = 0;
 uint16_t tickRate = 1000;     // Display update rate in ms
 float WindSpeedToFillBar = 15;   // m/s
-double target_battery_current = 1.3;
+double target_battery_current = 2.1;
 uint8_t turbine_to_bat_switch_pwm = 0;
 // uint8_t battery_output_switch_pwm = 0;
 
@@ -68,6 +68,8 @@ time_t requestSync();
 void manometerInterrupt();
 void turbineInterrupt();
 double clip(double n, double lower, double upper);
+double batteryChargeVoltageDrop(double currentIn, double currentOut);
+double batteryDischargeVoltageDrop(double currentIn, double currentOut);
 
 // ---------------
 //      Setup
@@ -170,8 +172,11 @@ void loop() {
 
         // --------------------------------
         //      Control battery charge
-        // --------------------------------      
-        if (turbine_voltage > 11.5 && battery_voltage < 13) {
+        // --------------------------------
+        double max_voltage = 13 + batteryChargeVoltageDrop(turbine_current, output_current);
+        double min_voltage = 11.7 + batteryDischargeVoltageDrop(turbine_current, output_current);
+    
+        if (battery_voltage < max_voltage) {
             digitalWrite(dummy_load_switch, LOW);
             double battery_current_vs_target = turbine_current / target_battery_current;
 
@@ -188,14 +193,14 @@ void loop() {
             digitalWrite(turbine_to_bat_switch, LOW);
             turbine_to_bat_switch_pwm = 0;
 
-            if (turbine_voltage > 11.5) {
+            if (turbine_voltage > max_voltage) {
                 digitalWrite(dummy_load_switch, HIGH);
             } else {
                 digitalWrite(dummy_load_switch, LOW);
             }
         }
 
-        if (battery_voltage > 11.5) {
+        if (battery_voltage > min_voltage) {
             digitalWrite(battery_output_switch, HIGH);
         } else {
             digitalWrite(battery_output_switch, LOW);
@@ -311,4 +316,28 @@ void turbineInterrupt() {
 
 double clip(double n, double lower, double upper) {
     return max(lower, min(n, upper));
+}
+
+double mosfetVoltageDrop(double current) {
+    return current * 0.2;
+}
+
+double batteryChargeVoltageDrop(double currentIn, double currentOut) {
+    double batCurrent = currentIn - currentOut;
+
+    if (batCurrent > 0.2) {
+        return 0.5;
+    } else {
+        return 0;
+    }
+}
+
+double batteryDischargeVoltageDrop(double currentIn, double currentOut) {
+    double batCurrent = currentIn - currentOut;
+
+    if (batCurrent < -0.2) {
+        return -0.5;
+    } else {
+        return 0;
+    }
 }
