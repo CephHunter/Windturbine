@@ -222,13 +222,13 @@ void loop() {
         // lcd.print(addTrailingSpaces(bar));
 
         lcd.setCursor(0,0);
-        lcd.print(addTrailingSpaces("U1:" + String(turbine_voltage), 8));
-        lcd.setCursor(8,0);
-        lcd.print(addTrailingSpaces("I1:" + String(turbine_current), 8));
+        lcd.print(addTrailingSpaces("U1:" + String(turbine_voltage), 9));
+        lcd.setCursor(9,0);
+        lcd.print(addTrailingSpaces("I1:" + String(turbine_current), 7));
         lcd.setCursor(0,1);
-        lcd.print(addTrailingSpaces("U2:" + String(battery_voltage), 8));
-        lcd.setCursor(8,1);
-        lcd.print(addTrailingSpaces("I2:" + String(output_current), 8));
+        lcd.print(addTrailingSpaces("U2:" + String(battery_voltage), 9));
+        lcd.setCursor(9,1);
+        lcd.print(addTrailingSpaces("I2:" + String(output_current), 7));
 
         // --------------------------------------
         //      Store a line in the log file
