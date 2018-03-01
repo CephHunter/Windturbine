@@ -174,7 +174,7 @@ void loop() {
         //      Control battery charge
         // --------------------------------
         double max_voltage = 13 + batteryChargeVoltageDrop(turbine_current, output_current);
-        double min_voltage = 11.7 + batteryDischargeVoltageDrop(turbine_current, output_current);
+        double min_voltage = 11.5 + batteryDischargeVoltageDrop(turbine_current, output_current);
     
         if (battery_voltage < max_voltage) {
             digitalWrite(dummy_load_switch, LOW);
@@ -326,7 +326,7 @@ double batteryChargeVoltageDrop(double currentIn, double currentOut) {
     double batCurrent = currentIn - currentOut;
 
     if (batCurrent > 0.2) {
-        return 0.5;
+        return 0.25;
     } else {
         return 0;
     }
@@ -336,7 +336,7 @@ double batteryDischargeVoltageDrop(double currentIn, double currentOut) {
     double batCurrent = currentIn - currentOut;
 
     if (batCurrent < -0.2) {
-        return -0.5;
+        return -0.25;
     } else {
         return 0;
     }
