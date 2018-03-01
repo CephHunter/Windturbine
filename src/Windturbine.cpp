@@ -52,8 +52,11 @@ volatile uint16_t count_turbine = 0;
 uint32_t preTime = 0;
 uint32_t curTime = 0;
 uint16_t diff = 0;
-uint8_t tickRate = 1000;     // Display update rate in ms
+uint16_t tickRate = 1000;     // Display update rate in ms
 float WindSpeedToFillBar = 15;   // m/s
+double target_battery_current = 1.3;
+uint8_t turbine_to_bat_switch_pwm = 0;
+// uint8_t battery_output_switch_pwm = 0;
 
 // ---------------------------
 //      Declare functions
@@ -64,6 +67,7 @@ void processSyncMessage();
 time_t requestSync();
 void manometerInterrupt();
 void turbineInterrupt();
+double clip(double n, double lower, double upper);
 
 // ---------------
 //      Setup
@@ -164,25 +168,46 @@ void loop() {
         double battery_voltage = abs(analogRead(voltage_sense_battery) * 0.0315 - 0.0586);
         double output_current = abs(analogRead(current_sense_output) * 0.00460 - 0.16617);
 
-        // ---------------------------------
-        //      Control battery charger
-        // ---------------------------------
-        // digitalWrite(turbine_to_bat_switch, LOW);
-        // digitalWrite(battery_output_switch, LOW);
-        // digitalWrite(dummy_load_switch, LOW);
+        // --------------------------------
+        //      Control battery charge
+        // --------------------------------      
         if (turbine_voltage > 11.5 && battery_voltage < 13) {
-            
+            digitalWrite(dummy_load_switch, LOW);
+            double battery_current_vs_target = turbine_current / target_battery_current;
+
+            if (battery_current_vs_target < 0.05) {
+                turbine_to_bat_switch_pwm = 255;
+            } else {
+                if (turbine_to_bat_switch_pwm == 0) {turbine_to_bat_switch_pwm = 1;}
+                turbine_to_bat_switch_pwm = clip(round(turbine_to_bat_switch_pwm / battery_current_vs_target), 0, 255);
+            }
+
+            analogWrite(turbine_to_bat_switch, turbine_to_bat_switch_pwm);
+
         } else {
             digitalWrite(turbine_to_bat_switch, LOW);
+            turbine_to_bat_switch_pwm = 0;
+
+            if (turbine_voltage > 11.5) {
+                digitalWrite(dummy_load_switch, HIGH);
+            } else {
+                digitalWrite(dummy_load_switch, LOW);
+            }
         }
 
-        // ---------------------------------
-        //      Display data on the LCD
-        // ---------------------------------
+        if (battery_voltage > 11.5) {
+            digitalWrite(battery_output_switch, HIGH);
+        } else {
+            digitalWrite(battery_output_switch, LOW);
+        }
+
+        // -----------------------------
+        //      Display data on LCD
+        // -----------------------------
         // lcd.setCursor(0,0);
         // lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
         // lcd.setCursor(8,0);
-        // lcd.print(addTrailingSpaces("RPM:" + String(count_turbine * 3 * tickRate), 8));
+        // lcd.print(addTrailingSpaces("RPM:" + String(count_turbine * 3 * 1000 / tickRate), 8));
 
         // String bar = "";
         // for (int i = 0; i < floor(WSpeed * 16 / WindSpeedToFillBar ); i++) {
@@ -282,4 +307,8 @@ void manometerInterrupt() {
 
 void turbineInterrupt() {
     count_turbine += 1;
+}
+
+double clip(double n, double lower, double upper) {
+    return max(lower, min(n, upper));
 }
