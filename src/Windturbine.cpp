@@ -166,9 +166,13 @@ void loop() {
         //      Measure voltage and current
         // -------------------------------------
         double turbine_voltage = abs(analogRead(voltage_sense_turbine) * 0.0311 - 0.0309);
-        double turbine_current = abs(analogRead(current_sense_turbine) * 0.00417 - 0.14326);
-        double battery_voltage = abs(analogRead(voltage_sense_battery) * 0.0315 - 0.0586);
-        double output_current = abs(analogRead(current_sense_output) * 0.00460 - 0.16617);
+        double turbine_current = analogRead(current_sense_turbine) * 0.00417 - 0.14326;
+        double battery_voltage = analogRead(voltage_sense_battery) * 0.0315 - 0.0586;
+        double output_current = analogRead(current_sense_output) * 0.00460 - 0.16617;
+        turbine_voltage = abs(turbine_voltage);
+        turbine_current = abs(turbine_current);
+        battery_voltage = abs(battery_voltage);
+        output_current  = abs(output_current );
 
         // --------------------------------
         //      Control battery charge
@@ -326,7 +330,7 @@ double batteryChargeVoltageDrop(double currentIn, double currentOut) {
     double batCurrent = currentIn - currentOut;
 
     if (batCurrent > 0.2) {
-        return 0.25;
+        return 0.7;
     } else {
         return 0;
     }
