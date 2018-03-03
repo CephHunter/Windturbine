@@ -54,9 +54,13 @@ uint32_t curTime = 0;
 uint16_t diff = 0;
 uint16_t tickRate = 1000;     // Display update rate in ms
 float WindSpeedToFillBar = 15;   // m/s
-double target_battery_current = 2.1;
+double max_battery_charge_current = 2.1;
+double battery_float_charge_current = 0.7;
+double battery_max_idle_voltage = 13.5;
+double battery_min_idle_voltage = 10.5;
 uint8_t turbine_to_bat_switch_pwm = 0;
 // uint8_t battery_output_switch_pwm = 0;
+double battery_SOC = 0;
 
 // ---------------------------
 //      Declare functions
@@ -70,6 +74,7 @@ void turbineInterrupt();
 double clip(double n, double lower, double upper);
 double batteryChargeVoltageDrop(double currentIn, double currentOut);
 double batteryDischargeVoltageDrop(double currentIn, double currentOut);
+double calcBatterySOC(double batVoltage, double currentIn, double currentOut);
 
 // ---------------
 //      Setup
@@ -165,7 +170,7 @@ void loop() {
         // -------------------------------------
         //      Measure voltage and current
         // -------------------------------------
-        double turbine_voltage = abs(analogRead(voltage_sense_turbine) * 0.0311 - 0.0309);
+        double turbine_voltage = analogRead(voltage_sense_turbine) * 0.0311 - 0.0309;
         double turbine_current = analogRead(current_sense_turbine) * 0.00417 - 0.14326;
         double battery_voltage = analogRead(voltage_sense_battery) * 0.0315 - 0.0586;
         double output_current = analogRead(current_sense_output) * 0.00460 - 0.16617;
@@ -177,9 +182,15 @@ void loop() {
         // --------------------------------
         //      Control battery charge
         // --------------------------------
-        double max_voltage = 13 + batteryChargeVoltageDrop(turbine_current, output_current);
-        double min_voltage = 11.5 + batteryDischargeVoltageDrop(turbine_current, output_current);
+        //---- Define regulator variables ----//
+        double max_voltage = battery_max_idle_voltage + batteryChargeVoltageDrop(turbine_current, output_current);
+        double min_voltage = battery_min_idle_voltage + batteryDischargeVoltageDrop(turbine_current, output_current);
+        double target_battery_current = battery_float_charge_current;
+        if (battery_voltage < battery_max_idle_voltage) {
+            target_battery_current = max_battery_charge_current;
+        }
     
+        //---- Limit turbine current ----//
         if (battery_voltage < max_voltage) {
             digitalWrite(dummy_load_switch, LOW);
             double battery_current_vs_target = turbine_current / target_battery_current;
@@ -197,6 +208,7 @@ void loop() {
             digitalWrite(turbine_to_bat_switch, LOW);
             turbine_to_bat_switch_pwm = 0;
 
+            //---- Manage dummy load ----//
             if (turbine_voltage > max_voltage) {
                 digitalWrite(dummy_load_switch, HIGH);
             } else {
@@ -204,11 +216,15 @@ void loop() {
             }
         }
 
+        //---- Manage output ----//
         if (battery_voltage > min_voltage) {
             digitalWrite(battery_output_switch, HIGH);
         } else {
             digitalWrite(battery_output_switch, LOW);
         }
+
+        //---- Get battery state of charge ----//
+        battery_SOC = calcBatterySOC(battery_voltage, turbine_current, output_current);
 
         // -----------------------------
         //      Display data on LCD
@@ -340,8 +356,15 @@ double batteryDischargeVoltageDrop(double currentIn, double currentOut) {
     double batCurrent = currentIn - currentOut;
 
     if (batCurrent < -0.2) {
-        return -0.25;
+        return -0.4;
     } else {
         return 0;
     }
+}
+
+double calcBatterySOC(double batVoltage, double currentIn, double currentOut) {
+    double realVoltage = batVoltage + batteryChargeVoltageDrop(currentIn, currentOut) + batteryDischargeVoltageDrop(currentIn, currentOut);
+    double range = battery_max_idle_voltage - battery_min_idle_voltage;
+
+    return (batVoltage - battery_min_idle_voltage) / range;
 }
