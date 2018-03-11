@@ -41,3 +41,7 @@ int IPControl_Write(Socket_t* socket, char* data, char* stream, int datalength);
 #endif
 
 #endif
+
+#ifdef __cplusplus
+}
+#endif

@@ -118,6 +118,7 @@ void setup() {
     pinMode(Stepper_EN, OUTPUT);
     pinMode(Stepper_CLK, OUTPUT);
     Serial.begin(9600);
+    Serial1.begin(9600);
 
     //---- Initialize RF module ----//
     pinMode(LEDpin, OUTPUT);  
@@ -130,13 +131,13 @@ void setup() {
     lcd.backlight();
 
     //---- Initialise SD card ----//
-    // Serial.print("Initializing SD card...");
+    Serial.print("Initializing SD card...");
     pinMode(53, OUTPUT);
     if (!SD.begin(53)) {
-        // Serial.println("initialization failed!");
+        Serial.println("initialization failed!");
         return;
     }
-    // Serial.println("initialization done.");
+    Serial.println("initialization done.");
 
     myFile = SD.open("log.txt", FILE_WRITE);
     myFile.println("---------------------------------");
@@ -148,7 +149,7 @@ void setup() {
 
     //---- Sync time with computer ----//
     setSyncProvider( requestSync );  //set function to call when sync required
-    // Serial.println("Waiting for sync message");
+    Serial.println("Waiting for sync message");
 
     //---- Add interrupts ----//
     attachInterrupt(digitalPinToInterrupt(sense_manometer), manometerInterrupt, RISING );
@@ -174,7 +175,7 @@ void loop() {
     int datalen = IPControl_Read(&connection, receiveData);
     if (datalen > 0) {
         if (receiveData[5] == 'N') digitalWrite(LEDpin, HIGH);
-        if (receiveData[5] == 'F') digitalWrite(LEDpin, LOW);  
+        if (receiveData[5] == 'F') digitalWrite(LEDpin, LOW);
     }
 
 
@@ -213,7 +214,7 @@ void loop() {
         //      Calc wind speed
         // -------------------------
         float WSpeed = 0;
-        // Serial.println(current_manometer_count);
+        Serial.println(current_manometer_count);
         if (current_manometer_count != 0) {
             WSpeed = (current_manometer_count / tickLength * 1000);
         }
@@ -307,9 +308,9 @@ void loop() {
         myFile = SD.open("log.txt", FILE_WRITE);
         if (myFile) {
             myFile.println(formatTime() + String(WSpeed));
-            // Serial.println(formatTime() + String(WSpeed));
+            Serial.println(formatTime() + String(WSpeed));
         } else {
-            // Serial.println("error opening log.txt");
+            Serial.println("error opening log.txt");
         }
         myFile.close();
 
@@ -322,8 +323,7 @@ void loop() {
         int stringlength = strlen(message_out);
         //-- who is going to receive our messages?
         connection.receiverID = 1;
-        IPControl_Write(&connection, message_out, stream, stringlength);
-        
+        IPControl_Write(&connection, message_out, stream, stringlength);        
     }
 }
 
@@ -427,14 +427,14 @@ double calcBatterySOC(double batVoltage, double currentIn, double currentOut) {
 }
 
 void UART_Send(char* data, uint8_t len) {
-    Serial.write(data, len);  
+    Serial1.write(data, len);  
 }
 
 void UART_receive() {
     char incomingByte;
-    while(Serial.available() > 0) {
+    while (Serial1.available() > 0) {
         // read the incoming byte:
-        incomingByte = Serial.read();
+        incomingByte = Serial1.read();
         IP_BufferDataByte(incomingByte);
     }
 }
