@@ -47,7 +47,7 @@ void loop()
     digitalWrite(LEDpin,HIGH);
   }
   
-  // send data every 5 seconds
+  // send data every 1 seconds
   if (millis()-previoustime>=1000)
   {
     // write here a stream of characters (string)
@@ -97,6 +97,5 @@ void UART_receive()
     incomingByte = Serial.read();
     IP_BufferDataByte(incomingByte);
   }
-}
 }
 //-----------------------------------------------

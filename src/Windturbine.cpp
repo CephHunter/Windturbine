@@ -1,5 +1,17 @@
 #include <arduino.h>
 
+// -----------------------
+//      For RF module
+// -----------------------
+#include <IPControl.h>
+#define LEDpin 13
+// define the connection between sender and receiver
+Socket_t connection; 
+// declare a stream variable array here
+char stream[64];
+void UART_receive();
+void UART_Send(char* data, uint8_t len);
+
 // -------------------------
 //      For LCD display
 // -------------------------
@@ -66,8 +78,7 @@ volatile uint16_t count_manometer = 0;
 volatile uint16_t count_turbine = 0;
 uint32_t preTime = 0;
 uint32_t curTime = 0;
-uint16_t diff = 0;
-uint16_t tickRate = 1000;     // Display update rate in ms
+uint16_t tickLength = 1000;     // Display update rate in ms
 float WindSpeedToFillBar = 15;   // m/s
 double max_battery_charge_current = 2.1;
 double battery_float_charge_current = 0.7;
@@ -80,7 +91,7 @@ double battery_SOC = 0;
 // ---------------------------
 //      Declare functions
 // ---------------------------
-String formatTime(uint32_t t);
+String formatTime();
 String addTrailingSpaces(String text, int TotalLength = 16);
 void processSyncMessage();
 time_t requestSync();
@@ -108,19 +119,24 @@ void setup() {
     pinMode(Stepper_CLK, OUTPUT);
     Serial.begin(9600);
 
+    //---- Initialize RF module ----//
+    pinMode(LEDpin, OUTPUT);  
+    // who am I (number)?
+    IPControl_Setup(8, UART_Send);  
+
     //---- Initiate lcd connection ----//
     lcd.begin();
     //---- Turn on backlight ----//
     lcd.backlight();
 
     //---- Initialise SD card ----//
-    Serial.print("Initializing SD card...");
+    // Serial.print("Initializing SD card...");
     pinMode(53, OUTPUT);
     if (!SD.begin(53)) {
-        Serial.println("initialization failed!");
+        // Serial.println("initialization failed!");
         return;
     }
-    Serial.println("initialization done.");
+    // Serial.println("initialization done.");
 
     myFile = SD.open("log.txt", FILE_WRITE);
     myFile.println("---------------------------------");
@@ -132,7 +148,7 @@ void setup() {
 
     //---- Sync time with computer ----//
     setSyncProvider( requestSync );  //set function to call when sync required
-    Serial.println("Waiting for sync message");
+    // Serial.println("Waiting for sync message");
 
     //---- Add interrupts ----//
     attachInterrupt(digitalPinToInterrupt(sense_manometer), manometerInterrupt, RISING );
@@ -149,6 +165,18 @@ void loop() {
     if (Serial.available()) {
       processSyncMessage();
     }
+
+    // =========================
+    //      Receive RF data
+    // =========================
+    char receiveData[64];
+    UART_receive();
+    int datalen = IPControl_Read(&connection, receiveData);
+    if (datalen > 0) {
+        if (receiveData[5] == 'N') digitalWrite(LEDpin, HIGH);
+        if (receiveData[5] == 'F') digitalWrite(LEDpin, LOW);  
+    }
+
 
     // ===============================
     //      Stepper drive control
@@ -171,17 +199,23 @@ void loop() {
     //      Process data
     // ======================
     curTime = millis();
-    diff = curTime - preTime;
-    if (diff >= tickRate) {
+    if ((curTime - preTime) >= tickLength) {
+        // ---------------------------------
+        //      Reset counter variables
+        // ---------------------------------
         preTime = curTime;
+        uint16_t current_manometer_count = count_manometer;
+        uint16_t current_turbine_count = count_turbine;
+        count_manometer = 0;
+        count_turbine = 0;
 
         // -------------------------
         //      Calc wind speed
         // -------------------------
         float WSpeed = 0;
-        Serial.println(count_manometer);
-        if (count_manometer != 0) {
-            WSpeed = (count_manometer / tickRate * 1000);
+        // Serial.println(current_manometer_count);
+        if (current_manometer_count != 0) {
+            WSpeed = (current_manometer_count / tickLength * 1000);
         }
 
         // -------------------------------------
@@ -249,7 +283,7 @@ void loop() {
         // lcd.setCursor(0,0);
         // lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
         // lcd.setCursor(8,0);
-        // lcd.print(addTrailingSpaces("RPM:" + String(count_turbine * 3 * 1000 / tickRate), 8));
+        // lcd.print(addTrailingSpaces("RPM:" + String(count_turbine * 3 * 1000 / tickLength), 8));
 
         // String bar = "";
         // for (int i = 0; i < floor(WSpeed * 16 / WindSpeedToFillBar ); i++) {
@@ -272,25 +306,31 @@ void loop() {
         // --------------------------------------
         myFile = SD.open("log.txt", FILE_WRITE);
         if (myFile) {
-            myFile.println(formatTime(curTime) + String(WSpeed));
-            Serial.println(formatTime(curTime) + String(WSpeed));
+            myFile.println(formatTime() + String(WSpeed));
+            // Serial.println(formatTime() + String(WSpeed));
         } else {
-            Serial.println("error opening log.txt");
+            // Serial.println("error opening log.txt");
         }
         myFile.close();
 
-        // ---------------------------------
-        //      Reset counter variables
-        // ---------------------------------
-        count_manometer = 0;
-        count_turbine = 0;
+        // ----------------------
+        //      Send RF data
+        // ----------------------
+        // write here a stream of characters (string)
+        char message_out[64] = "This is a test";
+        // calculate the length of the string to be sent
+        int stringlength = strlen(message_out);
+        //-- who is going to receive our messages?
+        connection.receiverID = 1;
+        IPControl_Write(&connection, message_out, stream, stringlength);
+        
     }
 }
 
 // --------------------------
 //      Helper functions
 // --------------------------
-String formatTime(uint32_t t) {
+String formatTime() {
     String res = "";
 
     if ( day() < 10 ) { res += "0"; }
@@ -384,4 +424,17 @@ double calcBatterySOC(double batVoltage, double currentIn, double currentOut) {
     double range = battery_max_idle_voltage - battery_min_idle_voltage;
 
     return (batVoltage - battery_min_idle_voltage) / range;
+}
+
+void UART_Send(char* data, uint8_t len) {
+    Serial.write(data, len);  
+}
+
+void UART_receive() {
+    char incomingByte;
+    while(Serial.available() > 0) {
+        // read the incoming byte:
+        incomingByte = Serial.read();
+        IP_BufferDataByte(incomingByte);
+    }
 }
