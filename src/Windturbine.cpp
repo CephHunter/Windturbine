@@ -118,7 +118,7 @@ void setup() {
     pinMode(Stepper_EN, OUTPUT);
     pinMode(Stepper_CLK, OUTPUT);
     Serial.begin(9600);
-    Serial1.begin(9600);
+    // Serial1.begin(9600);
 
     //---- Initialize RF module ----//
     pinMode(LEDpin, OUTPUT);  
@@ -214,7 +214,7 @@ void loop() {
         //      Calc wind speed
         // -------------------------
         float WSpeed = 0;
-        Serial.println(current_manometer_count);
+        // Serial.println(current_manometer_count);
         if (current_manometer_count != 0) {
             WSpeed = (current_manometer_count / tickLength * 1000);
         }
@@ -308,9 +308,9 @@ void loop() {
         myFile = SD.open("log.txt", FILE_WRITE);
         if (myFile) {
             myFile.println(formatTime() + String(WSpeed));
-            Serial.println(formatTime() + String(WSpeed));
+            // Serial.println(formatTime() + String(WSpeed));
         } else {
-            Serial.println("error opening log.txt");
+            // Serial.println("error opening log.txt");
         }
         myFile.close();
 
@@ -427,14 +427,14 @@ double calcBatterySOC(double batVoltage, double currentIn, double currentOut) {
 }
 
 void UART_Send(char* data, uint8_t len) {
-    Serial1.write(data, len);  
+    Serial.write(data, len);  
 }
 
 void UART_receive() {
     char incomingByte;
-    while (Serial1.available() > 0) {
+    while (Serial.available() > 0) {
         // read the incoming byte:
-        incomingByte = Serial1.read();
+        incomingByte = Serial.read();
         IP_BufferDataByte(incomingByte);
     }
 }
