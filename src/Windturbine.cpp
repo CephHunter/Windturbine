@@ -25,24 +25,39 @@ File myFile;
 // ---------------------
 //      Define pins
 // ---------------------
-// Reserved pins (TX, RX): 0, 1
+// ==== Arduino Uno ====
+// Reserved pins (RF module): 0, 1
 // Reserved pins (SD card): 10, 11, 12, 13
 // Reserved pins (Display): A4, A5
+// UART (TX, RX): 0, 1
+// SPI (SS, MOSI, MISO, SCK): 10, 11, 12, 13
+// I2C (SDA, SCL): A4, A5
 // interrupt pins: 2, 3
 // PWM pins: 3, 5, 6, 9, 10, 11
+
+// ==== Arduino mega ====
+// Reserved pins (RF module): 0, 1
+// Reserved pins (SD card): 10, 11, 12, 13, 50, 51, 52, 53
+// Reserved pins (Display): 20, 21
+// UART (TX0, RX0, TX3, RX3, TX2, RX2, TX1, RX1): 0, 1, 14, 15, 16, 17, 18, 19
+// SPI (SS, MOSI, MISO, SCK): 53, 51, 50, 52
+// I2C (SDA, SCL): 20, 21
+// interrupt pins: 2, 3, 18, 19, 20, 21
+// PWM pins: 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 44, 45, 46
+
 #define sense_manometer 2
 #define sense_turbine 3
 #define current_sense_turbine A2
 #define voltage_sense_turbine A3
 #define current_sense_output A0
 #define voltage_sense_battery A1
-#define turbine_to_bat_switch 6
+#define turbine_to_bat_switch 4
 #define battery_output_switch 5
-#define dummy_load_switch 4
+#define dummy_load_switch 22
 // #define StepperDriverPot A3
-#define Stepper_EN 8
+#define Stepper_EN 23
 // #define Stepper_CW 6
-#define Stepper_CLK 9
+#define Stepper_CLK 6
 
 // ----------------------------------
 //      Declare global variables
@@ -100,7 +115,8 @@ void setup() {
 
     //---- Initialise SD card ----//
     Serial.print("Initializing SD card...");
-    if (!SD.begin(10)) {
+    pinMode(53, OUTPUT);
+    if (!SD.begin(53)) {
         Serial.println("initialization failed!");
         return;
     }
@@ -163,8 +179,9 @@ void loop() {
         //      Calc wind speed
         // -------------------------
         float WSpeed = 0;
+        Serial.println(count_manometer);
         if (count_manometer != 0) {
-            WSpeed = (count_manometer * tickRate * 3) * 0.0306 - 1.22;
+            WSpeed = (count_manometer / tickRate * 1000);
         }
 
         // -------------------------------------
@@ -258,7 +275,7 @@ void loop() {
             myFile.println(formatTime(curTime) + String(WSpeed));
             Serial.println(formatTime(curTime) + String(WSpeed));
         } else {
-            Serial.println("error opening test.txt");
+            Serial.println("error opening log.txt");
         }
         myFile.close();
 
