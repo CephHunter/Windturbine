@@ -4,7 +4,6 @@
 //      For RF module
 // -----------------------
 #include <IPControl.h>
-#define LEDpin 13
 // define the connection between sender and receiver
 Socket_t connection; 
 // declare a stream variable array here
@@ -101,6 +100,7 @@ double clip(double n, double lower, double upper);
 double batteryChargeVoltageDrop(double currentIn, double currentOut);
 double batteryDischargeVoltageDrop(double currentIn, double currentOut);
 double calcBatterySOC(double batVoltage, double currentIn, double currentOut);
+double roundDepth(double digit, int precision = 0);
 
 // ---------------
 //      Setup
@@ -118,12 +118,11 @@ void setup() {
     pinMode(Stepper_EN, OUTPUT);
     pinMode(Stepper_CLK, OUTPUT);
     Serial.begin(9600);
-    Serial1.begin(9600);
 
-    //---- Initialize RF module ----//
-    pinMode(LEDpin, OUTPUT);  
-    // who am I (number)?
-    IPControl_Setup(8, UART_Send);  
+    //---- Initialize RF module ----// 
+    // who am I ()? 107, 108, 109
+    // admin = 107
+    IPControl_Setup(107, UART_Send);  
 
     //---- Initiate lcd connection ----//
     lcd.begin();
@@ -174,10 +173,8 @@ void loop() {
     UART_receive();
     int datalen = IPControl_Read(&connection, receiveData);
     if (datalen > 0) {
-        if (receiveData[5] == 'N') digitalWrite(LEDpin, HIGH);
-        if (receiveData[5] == 'F') digitalWrite(LEDpin, LOW);
+        // Do something
     }
-
 
     // ===============================
     //      Stepper drive control
@@ -318,12 +315,18 @@ void loop() {
         //      Send RF data
         // ----------------------
         // write here a stream of characters (string)
-        char message_out[64] = "This is a test";
+        char message_out[64] = "Pieter Partous";
         // calculate the length of the string to be sent
         int stringlength = strlen(message_out);
         //-- who is going to receive our messages?
         connection.receiverID = 1;
-        IPControl_Write(&connection, message_out, stream, stringlength);        
+        int sendCheck = IPControl_Write(&connection, message_out, stream, stringlength);
+
+        if (sendCheck > 0) {
+            Serial.println("Successfully send RF message");
+        } else {
+            Serial.println("Failed to send RF message");
+        }
     }
 }
 
@@ -423,18 +426,22 @@ double calcBatterySOC(double batVoltage, double currentIn, double currentOut) {
     double realVoltage = batVoltage + batteryChargeVoltageDrop(currentIn, currentOut) + batteryDischargeVoltageDrop(currentIn, currentOut);
     double range = battery_max_idle_voltage - battery_min_idle_voltage;
 
-    return (batVoltage - battery_min_idle_voltage) / range;
+    return (realVoltage - battery_min_idle_voltage) / range;
+}
+
+double roundDepth(double digit, int precision) {
+    return round(digit * pow(10, precision)) / pow(10, precision);
 }
 
 void UART_Send(char* data, uint8_t len) {
-    Serial1.write(data, len);  
+    Serial.write(data, len);  
 }
 
 void UART_receive() {
     char incomingByte;
-    while (Serial1.available() > 0) {
+    while (Serial.available() > 0) {
         // read the incoming byte:
-        incomingByte = Serial1.read();
+        incomingByte = Serial.read();
         IP_BufferDataByte(incomingByte);
     }
 }
