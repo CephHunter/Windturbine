@@ -69,6 +69,8 @@ File myFile;
 #define Stepper_EN 23
 // #define Stepper_CW 6
 #define Stepper_CLK 6
+#define motor_rectify_drive_switch 30
+#define motor_short_brake_switch 31
 
 // ----------------------------------
 //      Declare global variables
