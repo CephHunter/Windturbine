@@ -1,5 +1,10 @@
 #include <arduino.h>
 
+// --------------------------------
+//      Include control values
+// --------------------------------
+#include <ini.h>
+
 // -----------------------
 //      For RF module
 // -----------------------
@@ -65,12 +70,11 @@ File myFile;
 #define turbine_to_bat_switch 4
 #define battery_output_switch 5
 #define dummy_load_switch 22
-// #define StepperDriverPot A3
 #define Stepper_EN 23
-// #define Stepper_CW 6
+#define Stepper_DIR 24
 #define Stepper_CLK 6
-#define motor_rectify_drive_switch 30
-#define motor_short_brake_switch 31
+#define generator_drive_switch 25
+#define brake_switch 26
 
 // ----------------------------------
 //      Declare global variables
@@ -79,12 +83,6 @@ volatile uint16_t count_manometer = 0;
 volatile uint16_t count_turbine = 0;
 uint32_t preTime = 0;
 uint32_t curTime = 0;
-uint16_t tickLength = 1000;     // Display update rate in ms
-float WindSpeedToFillBar = 15;   // m/s
-double max_battery_charge_current = 2.1;
-double battery_float_charge_current = 0.7;
-double battery_max_idle_voltage = 13.5;
-double battery_min_idle_voltage = 10.5;
 uint8_t turbine_to_bat_switch_pwm = 0;
 // uint8_t battery_output_switch_pwm = 0;
 double battery_SOC = 0;
@@ -118,7 +116,10 @@ void setup() {
     pinMode(battery_output_switch, OUTPUT);
     pinMode(dummy_load_switch, OUTPUT);
     pinMode(Stepper_EN, OUTPUT);
+    pinMode(Stepper_DIR, OUTPUT);
     pinMode(Stepper_CLK, OUTPUT);
+    pinMode(generator_drive_switch, OUTPUT);
+    pinMode(brake_switch, OUTPUT);
     Serial.begin(9600);
 
     //---- Initialize RF module ----// 
@@ -176,6 +177,38 @@ void loop() {
     int datalen = IPControl_Read(&connection, receiveData);
     if (datalen > 0) {
         // Do something
+        int data[3];
+        int counter = 0;
+        char* strpart = strtok(receiveData, ";");
+        while (strpart != NULL) {
+            data[counter] = atoi(strpart);
+            strpart = strtok(NULL, ";");
+            counter += 1;
+        }
+
+        digitalWrite(Stepper_DIR, LOW);
+        if (data[0] < 15) {
+            digitalWrite(Stepper_EN, HIGH);
+        } else {
+            digitalWrite(Stepper_EN, LOW);
+        }
+
+        int speed = data[0] * 30;
+        tone(Stepper_CLK, speed);
+        Serial.println(speed);
+
+        if (data[1] == 1) {
+            digitalWrite(generator_drive_switch, HIGH);
+        } else {
+            digitalWrite(generator_drive_switch, LOW);
+        }
+
+        if (data[2] == 1) {
+            digitalWrite(brake_switch, HIGH);
+        } else {
+            digitalWrite(brake_switch, LOW);
+        }
+
     }
 
     // ===============================
@@ -246,7 +279,7 @@ void loop() {
             digitalWrite(dummy_load_switch, LOW);
             double battery_current_vs_target = turbine_current / target_battery_current;
 
-            if (battery_current_vs_target < 0.05) {
+            if (battery_current_vs_target < bat_current_threshold) {
                 turbine_to_bat_switch_pwm = 255;
             } else {
                 if (turbine_to_bat_switch_pwm == 0) {turbine_to_bat_switch_pwm = 1;}
@@ -401,14 +434,14 @@ double clip(double n, double lower, double upper) {
 }
 
 double mosfetVoltageDrop(double current) {
-    return current * 0.2;
+    return current * mosfet_resistance;
 }
 
 double batteryChargeVoltageDrop(double currentIn, double currentOut) {
     double batCurrent = currentIn - currentOut;
 
-    if (batCurrent > 0.2) {
-        return 0.7;
+    if (batCurrent > bat_current_correction_threshold) {
+        return bat_charge_voltage_correction;
     } else {
         return 0;
     }
@@ -417,8 +450,8 @@ double batteryChargeVoltageDrop(double currentIn, double currentOut) {
 double batteryDischargeVoltageDrop(double currentIn, double currentOut) {
     double batCurrent = currentIn - currentOut;
 
-    if (batCurrent < -0.2) {
-        return -0.4;
+    if (batCurrent < -bat_current_correction_threshold) {
+        return -bat_discharge_voltage_correction;
     } else {
         return 0;
     }
