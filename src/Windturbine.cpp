@@ -121,16 +121,17 @@ void setup() {
     pinMode(generator_drive_switch, OUTPUT);
     pinMode(brake_switch, OUTPUT);
     Serial.begin(9600);
+    Serial3.begin(9600);
 
     //---- Initialize RF module ----// 
     // who am I ()? 107, 108, 109
     // admin = 107
     IPControl_Setup(107, UART_Send);  
 
-    //---- Initiate lcd connection ----//
-    lcd.begin();
-    //---- Turn on backlight ----//
-    lcd.backlight();
+    // //---- Initiate lcd connection ----//
+    // lcd.begin();
+    // //---- Turn on backlight ----//
+    // lcd.backlight();
 
     //---- Initialise SD card ----//
     Serial.print("Initializing SD card...");
@@ -176,8 +177,9 @@ void loop() {
     UART_receive();
     int datalen = IPControl_Read(&connection, receiveData);
     if (datalen > 0) {
+        Serial.println(receiveData);
         // Do something
-        int data[3];
+        int data[10];
         int counter = 0;
         char* strpart = strtok(receiveData, ";");
         while (strpart != NULL) {
@@ -186,7 +188,12 @@ void loop() {
             counter += 1;
         }
 
-        digitalWrite(Stepper_DIR, LOW);
+        if (data[3] == 1) {
+            digitalWrite(Stepper_DIR, HIGH);
+        } else {
+            digitalWrite(Stepper_DIR, LOW);
+        }
+
         if (data[0] < 15) {
             digitalWrite(Stepper_EN, HIGH);
         } else {
@@ -195,7 +202,7 @@ void loop() {
 
         int speed = data[0] * 30;
         tone(Stepper_CLK, speed);
-        Serial.println(speed);
+        // Serial.println(speed);
 
         if (data[1] == 1) {
             digitalWrite(generator_drive_switch, HIGH);
@@ -209,6 +216,9 @@ void loop() {
             digitalWrite(brake_switch, LOW);
         }
 
+        // char test[64];
+        // sprintf(test, "POT:%d\nDrive:%d\nBrake:%d\n", data[0], data[1], data[2]);
+        // Serial.println(test);
     }
 
     // ===============================
@@ -245,8 +255,8 @@ void loop() {
         // -------------------------
         //      Calc wind speed
         // -------------------------
-        float WSpeed = 0;
-        Serial.println(current_manometer_count);
+        double WSpeed = 0;
+        // Serial.println(current_manometer_count);
         if (current_manometer_count != 0) {
             WSpeed = (current_manometer_count / tickLength * 1000);
         }
@@ -325,14 +335,14 @@ void loop() {
         // lcd.setCursor(0,1);
         // lcd.print(addTrailingSpaces(bar));
 
-        lcd.setCursor(0,0);
-        lcd.print(addTrailingSpaces("U1:" + String(turbine_voltage), 9));
-        lcd.setCursor(9,0);
-        lcd.print(addTrailingSpaces("I1:" + String(turbine_current), 7));
-        lcd.setCursor(0,1);
-        lcd.print(addTrailingSpaces("U2:" + String(battery_voltage), 9));
-        lcd.setCursor(9,1);
-        lcd.print(addTrailingSpaces("I2:" + String(output_current), 7));
+        // lcd.setCursor(0,0);
+        // lcd.print(addTrailingSpaces("U1:" + String(turbine_voltage), 9));
+        // lcd.setCursor(9,0);
+        // lcd.print(addTrailingSpaces("I1:" + String(turbine_current), 7));
+        // lcd.setCursor(0,1);
+        // lcd.print(addTrailingSpaces("U2:" + String(battery_voltage), 9));
+        // lcd.setCursor(9,1);
+        // lcd.print(addTrailingSpaces("I2:" + String(output_current), 7));
 
         // --------------------------------------
         //      Store a line in the log file
@@ -340,7 +350,7 @@ void loop() {
         myFile = SD.open("log.txt", FILE_WRITE);
         if (myFile) {
             myFile.println(formatTime() + String(WSpeed));
-            Serial.println(formatTime() + String(WSpeed));
+            // Serial.println(formatTime() + String(WSpeed));
         } else {
             Serial.println("error opening log.txt");
         }
@@ -350,18 +360,15 @@ void loop() {
         //      Send RF data
         // ----------------------
         // write here a stream of characters (string)
-        char message_out[64] = "Pieter Partous";
+        char message_out[64];
+        sprintf(message_out, "%d;%d;%d;%d;0", (int)(turbine_voltage * 100), 
+            (int)(turbine_current * 100), (int)(battery_voltage * 100), (int)(output_current * 100));
+        Serial.println(message_out);
         // calculate the length of the string to be sent
         int stringlength = strlen(message_out);
         //-- who is going to receive our messages?
-        connection.receiverID = 1;
-        int sendCheck = IPControl_Write(&connection, message_out, stream, stringlength);
-
-        if (sendCheck > 0) {
-            Serial.println("Successfully send RF message");
-        } else {
-            Serial.println("Failed to send RF message");
-        }
+        connection.receiverID = 108;
+        IPControl_Write(&connection, message_out, stream, stringlength);
     }
 }
 
@@ -469,14 +476,14 @@ double roundDepth(double digit, int precision) {
 }
 
 void UART_Send(char* data, uint8_t len) {
-    Serial.write(data, len);  
+    Serial3.write(data, len);  
 }
 
 void UART_receive() {
     char incomingByte;
-    while (Serial.available() > 0) {
+    while (Serial3.available() > 0) {
         // read the incoming byte:
-        incomingByte = Serial.read();
+        incomingByte = Serial3.read();
         IP_BufferDataByte(incomingByte);
     }
 }
