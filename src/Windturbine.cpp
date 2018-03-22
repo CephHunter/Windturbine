@@ -128,10 +128,10 @@ void setup() {
     // admin = 107
     IPControl_Setup(107, UART_Send);  
 
-    //---- Initiate lcd connection ----//
-    lcd.begin();
-    //---- Turn on backlight ----//
-    lcd.backlight();
+    // //---- Initiate lcd connection ----//
+    // lcd.begin();
+    // //---- Turn on backlight ----//
+    // lcd.backlight();
 
     //---- Initialise SD card ----//
     Serial.print("Initializing SD card...");
@@ -177,7 +177,7 @@ void loop() {
     UART_receive();
     int datalen = IPControl_Read(&connection, receiveData);
     if (datalen > 0) {
-        Serial.println(receiveData);
+        // Serial.println(receiveData);
         // Do something
         int data[10];
         int counter = 0;
@@ -258,7 +258,7 @@ void loop() {
         double WSpeed = 0;
         // Serial.println(current_manometer_count);
         if (current_manometer_count != 0) {
-            WSpeed = (current_manometer_count / tickLength * 1000);
+            WSpeed = (current_manometer_count * 1000. / tickLength * 0.0835 + 1.0722);
         }
 
         // -------------------------------------
@@ -323,10 +323,10 @@ void loop() {
         // -----------------------------
         //      Display data on LCD
         // -----------------------------
-        lcd.setCursor(0,0);
-        lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
-        lcd.setCursor(8,0);
-        lcd.print(addTrailingSpaces("RPM:" + String(current_turbine_count * 3 / 2 * 1000 / tickLength), 8));
+        // lcd.setCursor(0,0);
+        // lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
+        // lcd.setCursor(8,0);
+        // lcd.print(addTrailingSpaces("RPM:" + String(current_turbine_count * 3 / 2 * 1000 / tickLength), 8));
 
         // String bar = "";
         // for (int i = 0; i < floor(WSpeed * 16 / WindSpeedToFillBar ); i++) {
@@ -363,7 +363,7 @@ void loop() {
         char message_out[64];
         sprintf(message_out, "%d;%d;%d;%d;0", (int)(turbine_voltage * 100), 
             (int)(turbine_current * 100), (int)(battery_voltage * 100), (int)(output_current * 100));
-        Serial.println(message_out);
+        // Serial.println(message_out);
         // calculate the length of the string to be sent
         int stringlength = strlen(message_out);
         //-- who is going to receive our messages?
