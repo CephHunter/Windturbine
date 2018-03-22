@@ -128,10 +128,10 @@ void setup() {
     // admin = 107
     IPControl_Setup(107, UART_Send);  
 
-    // //---- Initiate lcd connection ----//
-    // lcd.begin();
-    // //---- Turn on backlight ----//
-    // lcd.backlight();
+    //---- Initiate lcd connection ----//
+    lcd.begin();
+    //---- Turn on backlight ----//
+    lcd.backlight();
 
     //---- Initialise SD card ----//
     Serial.print("Initializing SD card...");
@@ -323,10 +323,10 @@ void loop() {
         // -----------------------------
         //      Display data on LCD
         // -----------------------------
-        // lcd.setCursor(0,0);
-        // lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
-        // lcd.setCursor(8,0);
-        // lcd.print(addTrailingSpaces("RPM:" + String(count_turbine * 3 * 1000 / tickLength), 8));
+        lcd.setCursor(0,0);
+        lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
+        lcd.setCursor(8,0);
+        lcd.print(addTrailingSpaces("RPM:" + String(current_turbine_count * 3 / 2 * 1000 / tickLength), 8));
 
         // String bar = "";
         // for (int i = 0; i < floor(WSpeed * 16 / WindSpeedToFillBar ); i++) {
