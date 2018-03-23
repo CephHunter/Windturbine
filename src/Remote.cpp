@@ -52,6 +52,8 @@ double turbine_voltage = 0;
 double turbine_current = 0;
 double battery_voltage = 0;
 double output_current = 0;
+double wSpeed = 0;
+double turbineRPM = 0;
 
 // ---------------------------
 //      Declare functions
@@ -92,34 +94,46 @@ void loop() {
     UART_receive();
     int datalen = IPControl_Read(&connection, receiveData);
     if (datalen > 0) {
-        int data[10];
+        Serial.println("");
+        Serial.println(receiveData);
+        Serial.println("");
+        double data[10];
         int counter = 0;
         char* strpart = strtok(receiveData, ";");
         while (strpart != NULL) {
-            data[counter] = atoi(strpart);
+            data[counter] = atof(strpart);
             strpart = strtok(NULL, ";");
             counter += 1;
         }
 
-        turbine_voltage = data[0] / 100.;
-        turbine_current = data[1] / 100.;
-        battery_voltage = data[2] / 100.;
-        output_current  = data[3] / 100.;
+        turbine_voltage = data[0];
+        turbine_current = data[1];
+        battery_voltage = data[2];
+        output_current  = data[3];
+        wSpeed = data[4];
+        turbineRPM = (int)data[5];
 
         // -----------------------------
         //      Display data on LCD
         // -----------------------------
+        // lcd.setCursor(0,0);
+        // lcd.print(addTrailingSpaces("U1:" + String(turbine_voltage), 9));
+        // lcd.setCursor(9,0);
+        // lcd.print(addTrailingSpaces("I1:" + String(turbine_current), 7));
+        // lcd.setCursor(0,1);
+        // lcd.print(addTrailingSpaces("U2:" + String(battery_voltage), 9));
+        // lcd.setCursor(9,1);
+        // lcd.print(addTrailingSpaces("I2:" + String(output_current), 7));
+
         lcd.setCursor(0,0);
-        lcd.print(addTrailingSpaces("U1:" + String(turbine_voltage), 9));
-        lcd.setCursor(9,0);
-        lcd.print(addTrailingSpaces("I1:" + String(turbine_current), 7));
+        lcd.print(addTrailingSpaces("V:" + String(wSpeed), 8));
+        lcd.setCursor(8,0);
+        lcd.print(addTrailingSpaces("P:" + String(turbine_voltage * turbine_current), 8));
         lcd.setCursor(0,1);
-        lcd.print(addTrailingSpaces("U2:" + String(battery_voltage), 9));
-        lcd.setCursor(9,1);
-        lcd.print(addTrailingSpaces("I2:" + String(output_current), 7));
+        lcd.print(addTrailingSpaces("RPM:" + String(turbineRPM)));
     }
 
-    if (millis() - prevtime > 500) {
+    if (millis() - prevtime > 350) {
         prevtime = millis();
 
         potValue = analogRead(POT);
@@ -143,9 +157,11 @@ void loop() {
         //      Send RF data
         // ======================
         // write here a stream of characters (string)
+        String message = String(potValue) + ";" + String(drive) + ";" + String(brake) + ";" + String(DIR) + ";0";
         char message_out[64];
-        sprintf(message_out, "%d;%d;%d;%d;0", potValue, drive, brake, DIR);
-        Serial.println(message_out);
+        message.toCharArray(message_out, 64);
+        // sprintf(message_out, "%d;%d;%d;%d;0", potValue, drive, brake, DIR);
+        // Serial.println(message_out);
         // calculate the length of the string to be sent
         int stringlength = strlen(message_out);
         //-- who is going to receive our messages?

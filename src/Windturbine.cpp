@@ -75,6 +75,7 @@ File myFile;
 #define Stepper_CLK 6
 #define generator_drive_switch 25
 #define brake_switch 26
+#define brake_limit_switch 27
 
 // ----------------------------------
 //      Declare global variables
@@ -86,6 +87,7 @@ uint32_t curTime = 0;
 uint8_t turbine_to_bat_switch_pwm = 0;
 // uint8_t battery_output_switch_pwm = 0;
 double battery_SOC = 0;
+int turbineRPM = 0;
 
 // ---------------------------
 //      Declare functions
@@ -120,6 +122,7 @@ void setup() {
     pinMode(Stepper_CLK, OUTPUT);
     pinMode(generator_drive_switch, OUTPUT);
     pinMode(brake_switch, OUTPUT);
+    pinMode(brake_limit_switch, INPUT);
     Serial.begin(9600);
     Serial3.begin(9600);
 
@@ -210,7 +213,7 @@ void loop() {
             digitalWrite(generator_drive_switch, LOW);
         }
 
-        if (data[2] == 1) {
+        if (data[2] == 1 && !(digitalRead(brake_limit_switch) == HIGH && data[3] == 0)) {
             digitalWrite(brake_switch, HIGH);
         } else {
             digitalWrite(brake_switch, LOW);
@@ -219,6 +222,13 @@ void loop() {
         // char test[64];
         // sprintf(test, "POT:%d\nDrive:%d\nBrake:%d\n", data[0], data[1], data[2]);
         // Serial.println(test);
+    }
+
+    // ====================================
+    //      Control brake limit switch
+    // ====================================
+    if (digitalRead(brake_limit_switch) == HIGH && bitRead(PORTD, brake_switch) == 1 && bitRead(PORTD, Stepper_DIR) == 0) {
+        digitalWrite(brake_switch, LOW);
     }
 
     // ===============================
@@ -251,6 +261,7 @@ void loop() {
         uint16_t current_turbine_count = count_turbine;
         count_manometer = 0;
         count_turbine = 0;
+        turbineRPM = current_turbine_count * 3 / 2 * 1000 / tickLength;
 
         // -------------------------
         //      Calc wind speed
@@ -360,9 +371,13 @@ void loop() {
         //      Send RF data
         // ----------------------
         // write here a stream of characters (string)
+        String message = String(turbine_voltage) + ";" +
+            String(turbine_current) + ";" + String(battery_voltage) + ";" + String(output_current) + ";" +
+            String(WSpeed) + ";" + String(turbineRPM) + ";0";
         char message_out[64];
-        sprintf(message_out, "%d;%d;%d;%d;0", (int)(turbine_voltage * 100), 
-            (int)(turbine_current * 100), (int)(battery_voltage * 100), (int)(output_current * 100));
+        message.toCharArray(message_out, 64);
+        // sprintf(message_out, "%d;%d;%d;%d;0", (int)(turbine_voltage * 100), 
+            // (int)(turbine_current * 100), (int)(battery_voltage * 100), (int)(output_current * 100));
         // Serial.println(message_out);
         // calculate the length of the string to be sent
         int stringlength = strlen(message_out);
