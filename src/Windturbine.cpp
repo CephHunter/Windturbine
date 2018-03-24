@@ -1,9 +1,11 @@
 #include <arduino.h>
+#include <util/atomic.h>
 
 // --------------------------------
 //      Include control values
 // --------------------------------
 #include <ini.h>
+#include <Shared functions.h>
 
 // -----------------------
 //      For RF module
@@ -33,10 +35,12 @@ File myFile;
 // -------------------------
 //      For timekeeping
 // -------------------------
-#include <Time.h>
+// #include <Time.h>
 #include <TimeLib.h>
+// #include <Wire.h>    // Already included
+#include <DS1307RTC.h>
 #define TIME_HEADER  "T"   // Header tag for serial time sync message
-#define TIME_REQUEST  7    // ASCII bell character requests a time sync message
+// #define TIME_REQUEST  7    // ASCII bell character requests a time sync message
 
 // ---------------------
 //      Define pins
@@ -82,27 +86,26 @@ File myFile;
 // ----------------------------------
 volatile uint16_t count_manometer = 0;
 volatile uint16_t count_turbine = 0;
+uint16_t current_manometer_count = 0;
+uint16_t current_turbine_count = 0;
 uint32_t preTime = 0;
 uint32_t curTime = 0;
 uint8_t turbine_to_bat_switch_pwm = 0;
 // uint8_t battery_output_switch_pwm = 0;
 double battery_SOC = 0;
-int turbineRPM = 0;
+uint16_t turbineRPM = 0;
 
 // ---------------------------
 //      Declare functions
 // ---------------------------
 String formatTime();
-String addTrailingSpaces(String text, int TotalLength = 16);
-void processSyncMessage();
-time_t requestSync();
+unsigned long processSyncMessage();
+// time_t requestSync();
 void manometerInterrupt();
 void turbineInterrupt();
-double clip(double n, double lower, double upper);
 double batteryChargeVoltageDrop(double currentIn, double currentOut);
 double batteryDischargeVoltageDrop(double currentIn, double currentOut);
 double calcBatterySOC(double batVoltage, double currentIn, double currentOut);
-double roundDepth(double digit, int precision = 0);
 
 // ---------------
 //      Setup
@@ -154,8 +157,11 @@ void setup() {
     myFile.close();
 
     //---- Sync time with computer ----//
-    setSyncProvider( requestSync );  //set function to call when sync required
-    Serial.println("Waiting for sync message");
+    setSyncProvider( RTC.get );  //set function to call when sync required
+    if (timeStatus() != timeSet) 
+        Serial.println("Unable to sync with the RTC");
+    else
+        Serial.println("RTC has set the system time"); 
 
     //---- Add interrupts ----//
     attachInterrupt(digitalPinToInterrupt(sense_manometer), manometerInterrupt, RISING );
@@ -170,7 +176,11 @@ void loop() {
     //      Sync time
     // ===================
     if (Serial.available()) {
-      processSyncMessage();
+        time_t t = processSyncMessage();
+        if (t != 0) {
+            RTC.set(t);   // set the RTC and the system time to the received value
+            setTime(t);          
+        }
     }
 
     // =========================
@@ -257,10 +267,12 @@ void loop() {
         //      Reset counter variables
         // ---------------------------------
         preTime = curTime;
-        uint16_t current_manometer_count = count_manometer;
-        uint16_t current_turbine_count = count_turbine;
-        count_manometer = 0;
-        count_turbine = 0;
+        ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+            current_manometer_count = count_manometer;
+            current_turbine_count = count_turbine;
+            count_manometer = 0;
+            count_turbine = 0;
+        }
         turbineRPM = current_turbine_count * 3 / 2 * 1000 / tickLength;
 
         // -------------------------
@@ -416,32 +428,24 @@ String formatTime() {
     return res;
 }
 
-String addTrailingSpaces(String text, int TotalLength) {
-    String res = text;
-    int blocksToAdd = TotalLength - text.length();
-    if (blocksToAdd < 0) {blocksToAdd = 0;}
-    for (uint8_t i = 0; i < blocksToAdd; i++) {
-        res += " ";
-    }
-    return res;
-}
-
-void processSyncMessage() {
-  unsigned long pctime;
-  const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013
+unsigned long processSyncMessage() {
+    unsigned long pctime = 0L;
+    const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013 
 
     if(Serial.find(TIME_HEADER)) {
         pctime = Serial.parseInt();
-        if( pctime >= DEFAULT_TIME) { // check the integer is a valid time (greater than Jan 1 2013)
-            setTime(pctime); // Sync Arduino clock to the time received on the serial port
+        return pctime;
+        if( pctime < DEFAULT_TIME) { // check the value is a valid time (greater than Jan 1 2013)
+            pctime = 0L; // return 0 to indicate that the time is not valid
         }
     }
+    return pctime;
 }
 
-time_t requestSync() {
-    Serial.write(TIME_REQUEST);
-    return 0; // the time will be sent later in response to serial mesg
-}
+// time_t requestSync() {
+//     Serial.write(TIME_REQUEST);
+//     return 0; // the time will be sent later in response to serial mesg
+// }
 
 void manometerInterrupt() {
     count_manometer += 1;
@@ -449,10 +453,6 @@ void manometerInterrupt() {
 
 void turbineInterrupt() {
     count_turbine += 1;
-}
-
-double clip(double n, double lower, double upper) {
-    return max(lower, min(n, upper));
 }
 
 double mosfetVoltageDrop(double current) {
@@ -484,10 +484,6 @@ double calcBatterySOC(double batVoltage, double currentIn, double currentOut) {
     double range = battery_max_idle_voltage - battery_min_idle_voltage;
 
     return (realVoltage - battery_min_idle_voltage) / range;
-}
-
-double roundDepth(double digit, int precision) {
-    return round(digit * pow(10, precision)) / pow(10, precision);
 }
 
 void UART_Send(char* data, uint8_t len) {
