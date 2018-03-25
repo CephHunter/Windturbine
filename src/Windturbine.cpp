@@ -196,7 +196,7 @@ void loop() {
         int counter = 0;
         char* strpart = strtok(receiveData, ";");
         while (strpart != NULL) {
-            data[counter] = atoi(strpart);
+            data[counter] = stringToInt(strpart);
             strpart = strtok(NULL, ";");
             counter += 1;
         }
@@ -273,7 +273,7 @@ void loop() {
             count_manometer = 0;
             count_turbine = 0;
         }
-        turbineRPM = current_turbine_count * 3 / 2 * 1000 / tickLength;
+        turbineRPM = (int)(current_turbine_count * 3. / 2 * 1000 / tickLength);
 
         // -------------------------
         //      Calc wind speed
@@ -388,9 +388,6 @@ void loop() {
             String(WSpeed) + ";" + String(turbineRPM) + ";0";
         char message_out[64];
         message.toCharArray(message_out, 64);
-        // sprintf(message_out, "%d;%d;%d;%d;0", (int)(turbine_voltage * 100), 
-            // (int)(turbine_current * 100), (int)(battery_voltage * 100), (int)(output_current * 100));
-        // Serial.println(message_out);
         // calculate the length of the string to be sent
         int stringlength = strlen(message_out);
         //-- who is going to receive our messages?

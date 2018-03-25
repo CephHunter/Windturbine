@@ -99,7 +99,7 @@ void loop() {
         int counter = 0;
         char* strpart = strtok(receiveData, ";");
         while (strpart != NULL) {
-            data[counter] = atof(strpart);
+            data[counter] = stringToDouble(strpart);
             strpart = strtok(NULL, ";");
             counter += 1;
         }
@@ -158,8 +158,6 @@ void loop() {
         String message = String(potValue) + ";" + String(drive) + ";" + String(brake) + ";" + String(DIR) + ";0";
         char message_out[64];
         message.toCharArray(message_out, 64);
-        // sprintf(message_out, "%d;%d;%d;%d;0", potValue, drive, brake, DIR);
-        // Serial.println(message_out);
         // calculate the length of the string to be sent
         int stringlength = strlen(message_out);
         //-- who is going to receive our messages?
