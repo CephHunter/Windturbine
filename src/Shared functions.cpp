@@ -31,10 +31,7 @@ double stringToDouble(char* str) {
         } else if (strpart == 46 && decimalpos == -1) {
             decimalpos = pos;
         } else if (48 <= strpart && strpart <= 57) {
-            if (pos > 0) {
-                number *= 10;
-            }
-
+            number *= 10;
             number += strpart - 48;
         } else {
             return 0;
@@ -52,4 +49,16 @@ double stringToDouble(char* str) {
 
 int stringToInt(char* str) {
     return (int)stringToDouble(str);
+}
+
+int stringIdentifier(char* str) {
+    int res = 0;
+    int stringlength = strlen(str);
+    for (int pos = 0; pos < stringlength; pos++) {
+        char strpart = str[pos];
+        res *= 10;
+        res += strpart;
+    }
+
+    return res;
 }

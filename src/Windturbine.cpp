@@ -94,6 +94,14 @@ uint8_t turbine_to_bat_switch_pwm = 0;
 // uint8_t battery_output_switch_pwm = 0;
 double battery_SOC = 0;
 uint16_t turbineRPM = 0;
+double turbine_voltage = 0;
+double turbine_current = 0;
+double battery_voltage = 0;
+double output_current =  0;
+double WSpeed = 0;
+uint8_t turbine_status = 0;
+uint8_t brake_status = 0;
+double generatedPower = 0;
 
 // ---------------------------
 //      Declare functions
@@ -152,8 +160,8 @@ void setup() {
     myFile.println("---------------------------------");
     myFile.println("            New Log");
     myFile.println("---------------------------------");
-    myFile.println("DD:MM:YYYY HH:MM:SS; v (m/s)");
-    myFile.println("----------------------------");
+    myFile.println("time;turbine_status;brake_status;turbine_voltage;turbine_current;battery_voltage;output_current;WSpeed;turbineRPM;generatedPower;battery_SOC");
+    myFile.println("---------------------------------");
     myFile.close();
 
     //---- Sync time with computer ----//
@@ -191,47 +199,68 @@ void loop() {
     int datalen = IPControl_Read(&connection, receiveData);
     if (datalen > 0) {
         // Serial.println(receiveData);
-        // Do something
-        int data[10];
-        int counter = 0;
-        char* strpart = strtok(receiveData, ";");
-        while (strpart != NULL) {
-            data[counter] = stringToInt(strpart);
-            strpart = strtok(NULL, ";");
-            counter += 1;
+
+        switch (stringIdentifier(receiveData)) {
+            case 90748:     // SEND
+                {
+                    String message = "3;" + String(turbineRPM) + ";" + String(WSpeed) + ";" + String(turbine_status) + ";" + String(generatedPower) + ";" + String(now());
+                    char message_out[64];
+                    message.toCharArray(message_out, 64);
+                    int stringlength = strlen(message_out);
+                    connection.receiverID = 1;
+                    IPControl_Write(&connection, message_out, stream, stringlength);
+                    break;
+                }
+            case 921404:    // START
+                {
+                    break;
+                }
+                
+            case 92270:     // STOP
+                {
+                    break;
+                }
+            default:
+                {
+                    int data[10];
+                    int counter = 0;
+                    char* strpart = strtok(receiveData, ";");
+                    while (strpart != NULL) {
+                        data[counter] = stringToInt(strpart);
+                        strpart = strtok(NULL, ";");
+                        counter += 1;
+                    }
+
+                    if (data[3] == 1) {
+                        digitalWrite(Stepper_DIR, HIGH);
+                    } else {
+                        digitalWrite(Stepper_DIR, LOW);
+                    }
+
+                    if (data[0] < 15) {
+                        digitalWrite(Stepper_EN, HIGH);
+                    } else {
+                        digitalWrite(Stepper_EN, LOW);
+                    }
+
+                    int speed = data[0] * 30;
+                    tone(Stepper_CLK, speed);
+                    // Serial.println(speed);
+
+                    if (data[1] == 1) {
+                        digitalWrite(generator_drive_switch, HIGH);
+                    } else {
+                        digitalWrite(generator_drive_switch, LOW);
+                    }
+
+                    if (data[2] == 1 && !(digitalRead(brake_limit_switch) == HIGH && data[3] == 0)) {
+                        digitalWrite(brake_switch, HIGH);
+                    } else {
+                        digitalWrite(brake_switch, LOW);
+                    }
+                }
         }
-
-        if (data[3] == 1) {
-            digitalWrite(Stepper_DIR, HIGH);
-        } else {
-            digitalWrite(Stepper_DIR, LOW);
-        }
-
-        if (data[0] < 15) {
-            digitalWrite(Stepper_EN, HIGH);
-        } else {
-            digitalWrite(Stepper_EN, LOW);
-        }
-
-        int speed = data[0] * 30;
-        tone(Stepper_CLK, speed);
-        // Serial.println(speed);
-
-        if (data[1] == 1) {
-            digitalWrite(generator_drive_switch, HIGH);
-        } else {
-            digitalWrite(generator_drive_switch, LOW);
-        }
-
-        if (data[2] == 1 && !(digitalRead(brake_limit_switch) == HIGH && data[3] == 0)) {
-            digitalWrite(brake_switch, HIGH);
-        } else {
-            digitalWrite(brake_switch, LOW);
-        }
-
-        // char test[64];
-        // sprintf(test, "POT:%d\nDrive:%d\nBrake:%d\n", data[0], data[1], data[2]);
-        // Serial.println(test);
+        
     }
 
     // ====================================
@@ -273,28 +302,35 @@ void loop() {
             count_manometer = 0;
             count_turbine = 0;
         }
-        turbineRPM = (int)(current_turbine_count * 3. / 2 * 1000 / tickLength);
-
-        // -------------------------
-        //      Calc wind speed
-        // -------------------------
-        double WSpeed = 0;
-        // Serial.println(current_manometer_count);
-        if (current_manometer_count != 0) {
-            WSpeed = (current_manometer_count * 1000. / tickLength * 0.0835 + 1.0722);
-        }
-
+       
         // -------------------------------------
         //      Measure voltage and current
         // -------------------------------------
-        double turbine_voltage = analogRead(voltage_sense_turbine) * 0.0311 - 0.0309;
-        double turbine_current = analogRead(current_sense_turbine) * 0.00417 - 0.14326;
-        double battery_voltage = analogRead(voltage_sense_battery) * 0.0315 - 0.0586;
-        double output_current = analogRead(current_sense_output) * 0.00460 - 0.16617;
+        turbine_voltage = analogRead(voltage_sense_turbine) * 0.0311 - 0.0309;
+        turbine_current = analogRead(current_sense_turbine) * 0.00417 - 0.14326;
+        battery_voltage = analogRead(voltage_sense_battery) * 0.0315 - 0.0586;
+        output_current = analogRead(current_sense_output) * 0.00460 - 0.16617;
         turbine_voltage = abs(turbine_voltage);
         turbine_current = abs(turbine_current);
         battery_voltage = abs(battery_voltage);
         output_current  = abs(output_current );
+
+        // ---------------------------------------------------------
+        //      Calc wind speed, turbineRPM and generated power
+        // ---------------------------------------------------------
+        if (current_manometer_count != 0) {
+            WSpeed = (current_manometer_count * 1000. / tickLength * 0.0835 + 1.0722);
+        } else {
+            WSpeed = 0;
+        }
+
+        turbineRPM = (int)(current_turbine_count * 3. / 2 * 1000 / tickLength);
+
+        if (turbine_status == 1) {
+            generatedPower = turbine_voltage * turbine_current;
+        } else {
+            generatedPower = 0;
+        }
 
         // --------------------------------
         //      Control battery charge
@@ -372,25 +408,33 @@ void loop() {
         // --------------------------------------
         myFile = SD.open("log.txt", FILE_WRITE);
         if (myFile) {
-            myFile.println(formatTime() + String(WSpeed));
-            // Serial.println(formatTime() + String(WSpeed));
+            myFile.println(
+                String(now()) + ";" +
+                String(turbine_status) + ";" +
+                String(brake_status) + ";" +
+                String(turbine_voltage) + ";" +
+                String(turbine_current) + ";" +
+                String(battery_voltage) + ";" +
+                String(output_current ) + ";" +
+                String(WSpeed) + ";" +
+                String(turbineRPM) + ";" +
+                String(generatedPower) + ";" +
+                String(battery_SOC) + ";"
+            );
         } else {
             Serial.println("error opening log.txt");
         }
         myFile.close();
 
-        // ----------------------
-        //      Send RF data
-        // ----------------------
-        // write here a stream of characters (string)
+        // -------------------------------------------
+        //      Send RF data to remote controller
+        // -------------------------------------------
         String message = String(turbine_voltage) + ";" +
             String(turbine_current) + ";" + String(battery_voltage) + ";" + String(output_current) + ";" +
             String(WSpeed) + ";" + String(turbineRPM) + ";0";
         char message_out[64];
         message.toCharArray(message_out, 64);
-        // calculate the length of the string to be sent
         int stringlength = strlen(message_out);
-        //-- who is going to receive our messages?
         connection.receiverID = 108;
         IPControl_Write(&connection, message_out, stream, stringlength);
     }
