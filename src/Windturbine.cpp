@@ -156,7 +156,7 @@ void setup() {
     }
     Serial.println("initialization done.");
 
-    myFile = SD.open("log.txt", FILE_WRITE);
+    myFile = SD.open(SDcardFileName, FILE_WRITE);
     myFile.println("---------------------------------");
     myFile.println("            New Log");
     myFile.println("---------------------------------");
@@ -231,29 +231,29 @@ void loop() {
                         counter += 1;
                     }
 
-                    if (data[3] == 1) {
+                    if (data[3] == StepperDIRvalForHigh) {
                         digitalWrite(Stepper_DIR, HIGH);
                     } else {
                         digitalWrite(Stepper_DIR, LOW);
                     }
 
-                    if (data[0] < 15) {
+                    if (data[0] < StepperENminPotValue) {
                         digitalWrite(Stepper_EN, HIGH);
                     } else {
                         digitalWrite(Stepper_EN, LOW);
                     }
 
-                    int speed = data[0] * 30;
+                    int speed = data[0] * stepperPotValueMultiplier;
                     tone(Stepper_CLK, speed);
                     // Serial.println(speed);
 
-                    if (data[1] == 1) {
+                    if (data[1] == generatorDriveSwitchValForHigh) {
                         digitalWrite(generator_drive_switch, HIGH);
                     } else {
                         digitalWrite(generator_drive_switch, LOW);
                     }
 
-                    if (data[2] == 1 && !(digitalRead(brake_limit_switch) == HIGH && data[3] == 0)) {
+                    if (data[2] == brakeSwitchValForHigh && !(digitalRead(brake_limit_switch) == HIGH && data[3] == !StepperDIRvalForHigh)) {
                         digitalWrite(brake_switch, HIGH);
                     } else {
                         digitalWrite(brake_switch, LOW);
@@ -266,26 +266,9 @@ void loop() {
     // ====================================
     //      Control brake limit switch
     // ====================================
-    if (digitalRead(brake_limit_switch) == HIGH && bitRead(PORTD, brake_switch) == 1 && bitRead(PORTD, Stepper_DIR) == 0) {
+    if (digitalRead(brake_limit_switch) == HIGH && bitRead(PORTD, brake_switch) == brakeSwitchValForHigh && bitRead(PORTD, Stepper_DIR) == !StepperDIRvalForHigh) {
         digitalWrite(brake_switch, LOW);
     }
-
-    // ===============================
-    //      Stepper drive control
-    // ===============================
-    // uint16_t potVal = analogRead(StepperDriverPot);
-    // if (potVal < 15) {
-    //     digitalWrite(Stepper_EN, HIGH);
-    // } else {
-    //     digitalWrite(Stepper_EN, LOW);
-    // }
-
-    // digitalWrite(Stepper_CW, LOW);
-    // int speed = potVal * 30;
-    // tone(Stepper_CLK, speed);
-    // Serial.println(speed);
-
-    //Serial.println(1.0 * speed / 1600 * 60 * 3);
 
     // ======================
     //      Process data
@@ -324,7 +307,7 @@ void loop() {
             WSpeed = 0;
         }
 
-        turbineRPM = (int)(current_turbine_count * 3. / 2 * 1000 / tickLength);
+        turbineRPM = (int)(current_turbine_count * 60. / turbineEncoderTheeth * 1000 / tickLength);
 
         if (turbine_status == 1) {
             generatedPower = turbine_voltage * turbine_current;
@@ -406,7 +389,7 @@ void loop() {
         // --------------------------------------
         //      Store a line in the log file
         // --------------------------------------
-        myFile = SD.open("log.txt", FILE_WRITE);
+        myFile = SD.open(SDcardFileName, FILE_WRITE);
         if (myFile) {
             myFile.println(
                 String(now()) + ";" +
@@ -422,7 +405,8 @@ void loop() {
                 String(battery_SOC) + ";"
             );
         } else {
-            Serial.println("error opening log.txt");
+            Serial.print("error opening ");
+            Serial.println(SDcardFileName);
         }
         myFile.close();
 
@@ -436,6 +420,11 @@ void loop() {
         message.toCharArray(message_out, 64);
         int stringlength = strlen(message_out);
         connection.receiverID = 108;
+        uint8_t prevSize = 0;
+        while (Serial3.available() != prevSize) {
+            prevSize == Serial3.available();
+            delayMicroseconds(serialWaitTime);
+        }
         IPControl_Write(&connection, message_out, stream, stringlength);
     }
 }

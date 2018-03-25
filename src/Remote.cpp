@@ -162,6 +162,11 @@ void loop() {
         int stringlength = strlen(message_out);
         //-- who is going to receive our messages?
         connection.receiverID = 107;
+        uint8_t prevSize = 0;
+        while (Serial3.available() != prevSize) {
+            prevSize == Serial3.available();
+            delayMicroseconds(serialWaitTime);
+        }
         IPControl_Write(&connection, message_out, stream, stringlength);
     }
 }

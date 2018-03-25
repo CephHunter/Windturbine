@@ -51,8 +51,8 @@ int stringToInt(char* str) {
     return (int)stringToDouble(str);
 }
 
-int stringIdentifier(char* str) {
-    int res = 0;
+uint32_t stringIdentifier(char* str) {
+    uint32_t res = 0;
     int stringlength = strlen(str);
     for (int pos = 0; pos < stringlength; pos++) {
         char strpart = str[pos];

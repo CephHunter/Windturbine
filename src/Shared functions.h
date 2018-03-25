@@ -5,4 +5,4 @@ double clip(double n, double lower, double upper);
 double roundDepth(double digit, int precision = 0);
 double stringToDouble(char* str);
 int stringToInt(char* str);
-int stringIdentifier(char* str);
+uint32_t stringIdentifier(char* str);
