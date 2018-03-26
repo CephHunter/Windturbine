@@ -14,14 +14,24 @@ const double bat_discharge_voltage_correction = -0.4;
 
 const double mosfet_resistance = 0.2;
 
-const bool StepperDIRvalForHigh = 1;
-const uint8_t StepperENminPotValue = 3;
+const uint8_t stepperDIRvalToCloseBrake = 1;
+const uint8_t stepperDIRvalToBoostTurbine = 1;
+const uint8_t stepperValToEnable = 0;
+const uint8_t stepperENminPotValue = 3;
 const uint8_t stepperPotValueMultiplier = 30;
-const bool generatorDriveSwitchValForHigh = 1;
-const bool brakeSwitchValForHigh = 1;
+const uint8_t generatorDriveSwitchValToActivate = 1;
+const uint8_t brakeSwitchValToActivate = 1;
 
-const uint8_t turbineEncoderTheeth = 40;
+const uint8_t turbineEncoderTheeth = 40;    // number of teeth on the encode wheel
 
-#define SDcardFileName "log.text"
+#define SDcardFileName "log.txt"
 
 const uint16_t serialWaitTime = 600; // microseconds
+
+const uint8_t sweepStartSpeed = 40;         // pulses per second, 200 = 1 RPM (stepper)
+const uint16_t brakeOpeningSpeed = 600;     
+const uint16_t brakeClosingSpeed = 600;
+const uint16_t pulsesToCloseBrake = 3000;   // 200 = 1 rotation
+const uint16_t brakeSpeedSweepTime = 1000;      // Time to get from sweepStartSpeed to tartget speed in milliseconds
+const uint16_t turbineBoostSpeed = 30000;
+const uint16_t turbineBoostSweepTime = 15000;

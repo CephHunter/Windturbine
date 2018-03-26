@@ -10,7 +10,7 @@ String addTrailingSpaces(String text, int TotalLength) {
     return res;
 }
 
-double clip(double n, double lower, double upper) {
+long clip(long n, long lower, long upper) {
     return max(lower, min(n, upper));
 }
 

@@ -84,24 +84,31 @@ File myFile;
 // ----------------------------------
 //      Declare global variables
 // ----------------------------------
+//---- Counters ----//
 volatile uint16_t count_manometer = 0;
 volatile uint16_t count_turbine = 0;
 uint16_t current_manometer_count = 0;
 uint16_t current_turbine_count = 0;
-uint32_t preTime = 0;
-uint32_t curTime = 0;
-uint8_t turbine_to_bat_switch_pwm = 0;
-// uint8_t battery_output_switch_pwm = 0;
-double battery_SOC = 0;
-uint16_t turbineRPM = 0;
+//---- Measurements ----//
 double turbine_voltage = 0;
 double turbine_current = 0;
 double battery_voltage = 0;
 double output_current =  0;
-double WSpeed = 0;
-uint8_t turbine_status = 0;
-uint8_t brake_status = 0;
 double generatedPower = 0;
+double WSpeed = 0;  // Wind speed
+uint16_t turbineRPM = 0;
+double battery_SOC = 0; // Battery state of charge
+//---- Control variables ----//
+uint32_t preTime = 0;   // Used to periodicly run a codeblock
+uint32_t curTime = 0;   // ^
+uint8_t turbine_to_bat_switch_pwm = 0;
+uint8_t turbine_status = 0;         // 1 == turning, 0 == not turning
+uint8_t brakeStepperStatus = 0;     // 0 == do nothing, 1 == close brake, 2 == open brake
+uint8_t stopTurbineStatus = 0;      // 0 == do nothing, 1 == bring turbine to a complete stop
+uint8_t turbineBoostStatus = 0;     // 0 == do nothing, 1 == boost turbine
+uint32_t stepperStartTime = 0;      // Used to control the sweep of the stepper
+//---- Other ----//
+#define UINT32_MAX 4294967295
 
 // ---------------------------
 //      Declare functions
@@ -114,6 +121,12 @@ void turbineInterrupt();
 double batteryChargeVoltageDrop(double currentIn, double currentOut);
 double batteryDischargeVoltageDrop(double currentIn, double currentOut);
 double calcBatterySOC(double batVoltage, double currentIn, double currentOut);
+void freqSweep(uint16_t startFreq, uint16_t endFreq, uint32_t startTime, uint16_t duration);
+uint8_t openBrake(uint32_t startTime);
+uint8_t closeBrake(uint32_t startTime);
+uint8_t stopTurbine(uint32_t startTime);
+uint8_t startTurbine(uint32_t startTime);
+void disableStepper();
 
 // ---------------
 //      Setup
@@ -160,7 +173,7 @@ void setup() {
     myFile.println("---------------------------------");
     myFile.println("            New Log");
     myFile.println("---------------------------------");
-    myFile.println("time;turbine_status;brake_status;turbine_voltage;turbine_current;battery_voltage;output_current;WSpeed;turbineRPM;generatedPower;battery_SOC");
+    myFile.println("time;turbine_status;brakeStepperStatus;turbine_voltage;turbine_current;battery_voltage;output_current;WSpeed;turbineRPM;generatedPower;battery_SOC");
     myFile.println("---------------------------------");
     myFile.close();
 
@@ -174,6 +187,13 @@ void setup() {
     //---- Add interrupts ----//
     attachInterrupt(digitalPinToInterrupt(sense_manometer), manometerInterrupt, RISING );
     attachInterrupt(digitalPinToInterrupt(sense_turbine), turbineInterrupt, RISING );
+
+    //---- Open the brake ----//
+    brakeStepperStatus = 2;
+    stepperStartTime = millis();
+    while (brakeStepperStatus == 2) {
+        brakeStepperStatus = openBrake(stepperStartTime);
+    }
 }
 
 // --------------
@@ -231,32 +251,32 @@ void loop() {
                         counter += 1;
                     }
 
-                    if (data[3] == StepperDIRvalForHigh) {
-                        digitalWrite(Stepper_DIR, HIGH);
+                    if (data[3] == 1) {
+                        digitalWrite(Stepper_DIR, stepperDIRvalToCloseBrake);
                     } else {
-                        digitalWrite(Stepper_DIR, LOW);
+                        digitalWrite(Stepper_DIR, !stepperDIRvalToCloseBrake);
                     }
 
-                    if (data[0] < StepperENminPotValue) {
-                        digitalWrite(Stepper_EN, HIGH);
+                    if (data[0] < stepperENminPotValue) {
+                        digitalWrite(Stepper_EN, !stepperValToEnable);
                     } else {
-                        digitalWrite(Stepper_EN, LOW);
+                        digitalWrite(Stepper_EN, stepperValToEnable);
                     }
 
                     int speed = data[0] * stepperPotValueMultiplier;
                     tone(Stepper_CLK, speed);
                     // Serial.println(speed);
 
-                    if (data[1] == generatorDriveSwitchValForHigh) {
-                        digitalWrite(generator_drive_switch, HIGH);
+                    if (data[1] == 1) {
+                        digitalWrite(generator_drive_switch, generatorDriveSwitchValToActivate);
                     } else {
-                        digitalWrite(generator_drive_switch, LOW);
+                        digitalWrite(generator_drive_switch, !generatorDriveSwitchValToActivate);
                     }
 
-                    if (data[2] == brakeSwitchValForHigh && !(digitalRead(brake_limit_switch) == HIGH && data[3] == !StepperDIRvalForHigh)) {
-                        digitalWrite(brake_switch, HIGH);
+                    if (data[2] == 1 && !(digitalRead(brake_limit_switch) == HIGH && data[3] == 0)) {
+                        digitalWrite(brake_switch, brakeSwitchValToActivate);
                     } else {
-                        digitalWrite(brake_switch, LOW);
+                        digitalWrite(brake_switch, !brakeSwitchValToActivate);
                     }
                 }
         }
@@ -266,7 +286,7 @@ void loop() {
     // ====================================
     //      Control brake limit switch
     // ====================================
-    if (digitalRead(brake_limit_switch) == HIGH && bitRead(PORTD, brake_switch) == brakeSwitchValForHigh && bitRead(PORTD, Stepper_DIR) == !StepperDIRvalForHigh) {
+    if (digitalRead(brake_limit_switch) == HIGH && bitRead(PORTD, brake_switch) == brakeSwitchValToActivate && bitRead(PORTD, Stepper_DIR) == !stepperDIRvalToCloseBrake) {
         digitalWrite(brake_switch, LOW);
     }
 
@@ -394,7 +414,7 @@ void loop() {
             myFile.println(
                 String(now()) + ";" +
                 String(turbine_status) + ";" +
-                String(brake_status) + ";" +
+                String(brakeStepperStatus) + ";" +
                 String(turbine_voltage) + ";" +
                 String(turbine_current) + ";" +
                 String(battery_voltage) + ";" +
@@ -429,9 +449,82 @@ void loop() {
     }
 }
 
+// -----------------------
+//      Brake control
+// -----------------------
+uint8_t openBrake(uint32_t startTime) {
+    if (digitalRead(brake_limit_switch) == LOW) {
+        digitalWrite(brake_switch, brakeSwitchValToActivate);
+        digitalWrite(Stepper_DIR, !stepperDIRvalToCloseBrake);
+        digitalWrite(Stepper_EN, stepperValToEnable);
+        freqSweep(sweepStartSpeed, brakeOpeningSpeed, startTime, brakeSpeedSweepTime);
+        return 2;
+    }
+    disableStepper();
+    digitalWrite(brake_switch, !brakeSwitchValToActivate);
+    return 0;
+}
+
+uint8_t closeBrake(uint32_t startTime) {
+    digitalWrite(brake_switch, brakeSwitchValToActivate);
+    digitalWrite(Stepper_DIR, stepperDIRvalToCloseBrake);
+    digitalWrite(Stepper_EN, stepperValToEnable);
+    freqSweep(sweepStartSpeed, brakeClosingSpeed, startTime, brakeSpeedSweepTime);
+
+    uint16_t usedPulses = (map( clip(millis() - startTime, 0, brakeSpeedSweepTime), 
+        0, brakeSpeedSweepTime, sweepStartSpeed, brakeClosingSpeed ) + sweepStartSpeed) / 2
+        * clip(millis() - startTime, 0, brakeSpeedSweepTime) / 1000
+        + brakeClosingSpeed * (clip(millis() - startTime, brakeSpeedSweepTime, UINT32_MAX) 
+        - brakeSpeedSweepTime) / 1000;
+    
+    if (usedPulses > pulsesToCloseBrake) {
+        disableStepper();
+        return 0;
+    }
+    return 1;
+}
+
+uint8_t stopTurbine(uint32_t startTime) {
+    digitalWrite(brake_switch, brakeSwitchValToActivate);
+    if (brakeStepperStatus == 1) {
+        brakeStepperStatus = closeBrake(startTime);
+    }
+    if (turbineRPM == 0) return 0;
+    return 1;
+}
+
+// -------------------------------
+//      Turbine drive control
+// -------------------------------
+uint8_t startTurbine(uint32_t startTime) {
+    digitalWrite(generator_drive_switch, generatorDriveSwitchValToActivate);
+    digitalWrite(Stepper_DIR, stepperDIRvalToBoostTurbine);
+    digitalWrite(Stepper_EN, stepperValToEnable);
+    freqSweep(sweepStartSpeed, turbineBoostSpeed, startTime, turbineBoostSweepTime);
+    if (millis() - startTime > turbineBoostSweepTime) {
+        disableStepper();
+        return 0;
+    } 
+    return 1;
+}
+
+// --------------------------------
+//      Disable stepper driver
+// --------------------------------
+void disableStepper() {
+    digitalWrite(Stepper_EN, !stepperValToEnable);
+    noTone(Stepper_CLK);
+}
+
 // --------------------------
 //      Helper functions
 // --------------------------
+void freqSweep(uint16_t startFreq, uint16_t endFreq, uint32_t startTime, uint16_t duration) {
+    double fraction = clip((millis() - startTime) * 1. / duration, 0, 1);
+    uint16_t currentFreq = (endFreq - startFreq) * fraction + startFreq;
+    tone(Stepper_CLK, currentFreq);
+}
+
 String formatTime() {
     String res = "";
 

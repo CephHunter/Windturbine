@@ -163,8 +163,8 @@ void loop() {
         //-- who is going to receive our messages?
         connection.receiverID = 107;
         uint8_t prevSize = 0;
-        while (Serial3.available() != prevSize) {
-            prevSize == Serial3.available();
+        while (Serial.available() != prevSize) {
+            prevSize == Serial.available();
             delayMicroseconds(serialWaitTime);
         }
         IPControl_Write(&connection, message_out, stream, stringlength);
