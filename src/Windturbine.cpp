@@ -173,7 +173,7 @@ void setup() {
     myFile.println("---------------------------------");
     myFile.println("            New Log");
     myFile.println("---------------------------------");
-    myFile.println("time;turbine_status;brakeStepperStatus;turbine_voltage;turbine_current;battery_voltage;output_current;WSpeed;turbineRPM;generatedPower;battery_SOC");
+    myFile.println("time;unix time;turbine_status;brakeStepperStatus;turbine_voltage;turbine_current;battery_voltage;output_current;WSpeed;turbineRPM;generatedPower;battery_SOC");
     myFile.println("---------------------------------");
     myFile.close();
 
@@ -189,11 +189,11 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(sense_turbine), turbineInterrupt, RISING );
 
     //---- Open the brake ----//
-    brakeStepperStatus = 2;
-    stepperStartTime = millis();
-    while (brakeStepperStatus == 2) {
-        brakeStepperStatus = openBrake(stepperStartTime);
-    }
+    // brakeStepperStatus = 2;
+    // stepperStartTime = millis();
+    // while (brakeStepperStatus == 2) {
+    //     brakeStepperStatus = openBrake(stepperStartTime);
+    // }
 }
 
 // --------------
@@ -218,7 +218,9 @@ void loop() {
     UART_receive();
     int datalen = IPControl_Read(&connection, receiveData);
     if (datalen > 0) {
-        // Serial.println(receiveData);
+        // Serial.println("");
+        // Serial.println("RDATA:"+String(receiveData));
+        // Serial.println("");
 
         switch (stringIdentifier(receiveData)) {
             case 90748:     // SEND
@@ -233,11 +235,13 @@ void loop() {
                 }
             case 921404:    // START
                 {
+                    Serial.println("START");
                     break;
                 }
                 
             case 92270:     // STOP
                 {
+                    Serial.println("STOP");
                     break;
                 }
             default:
@@ -265,7 +269,6 @@ void loop() {
 
                     int speed = data[0] * stepperPotValueMultiplier;
                     tone(Stepper_CLK, speed);
-                    // Serial.println(speed);
 
                     if (data[1] == 1) {
                         digitalWrite(generator_drive_switch, generatorDriveSwitchValToActivate);
@@ -295,6 +298,7 @@ void loop() {
     // ======================
     curTime = millis();
     if ((curTime - preTime) >= tickLength) {
+        Serial.println(formatTime());
         // ---------------------------------
         //      Reset counter variables
         // ---------------------------------
@@ -412,6 +416,7 @@ void loop() {
         myFile = SD.open(SDcardFileName, FILE_WRITE);
         if (myFile) {
             myFile.println(
+                String(formatTime()) + ";" +
                 String(now()) + ";" +
                 String(turbine_status) + ";" +
                 String(brakeStepperStatus) + ";" +
@@ -440,11 +445,11 @@ void loop() {
         message.toCharArray(message_out, 64);
         int stringlength = strlen(message_out);
         connection.receiverID = 108;
-        uint8_t prevSize = 0;
-        while (Serial3.available() != prevSize) {
-            prevSize == Serial3.available();
-            delayMicroseconds(serialWaitTime);
-        }
+        // uint8_t prevSize = 0;
+        // while (Serial3.available() != prevSize) {
+        //     prevSize == Serial3.available();
+        //     delayMicroseconds(serialWaitTime);
+        // }
         IPControl_Write(&connection, message_out, stream, stringlength);
     }
 }
@@ -546,7 +551,7 @@ String formatTime() {
     res += String( minute() ) + ":";
 
     if ( second() < 10 ) { res += "0"; }
-    res += String( second() ) + "; ";
+    res += String( second() );
 
     return res;
 }
@@ -564,11 +569,6 @@ unsigned long processSyncMessage() {
     }
     return pctime;
 }
-
-// time_t requestSync() {
-//     Serial.write(TIME_REQUEST);
-//     return 0; // the time will be sent later in response to serial mesg
-// }
 
 void manometerInterrupt() {
     count_manometer += 1;

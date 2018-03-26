@@ -92,9 +92,9 @@ void loop() {
     UART_receive();
     int datalen = IPControl_Read(&connection, receiveData);
     if (datalen > 0) {
-        Serial.println("");
-        Serial.println(receiveData);
-        Serial.println("");
+        // Serial.println("\n");
+        // Serial.println("RDATA:"+String(receiveData));
+        // Serial.println("\n");
         double data[10];
         int counter = 0;
         char* strpart = strtok(receiveData, ";");
@@ -154,19 +154,16 @@ void loop() {
         // ======================
         //      Send RF data
         // ======================
-        // write here a stream of characters (string)
         String message = String(potValue) + ";" + String(drive) + ";" + String(brake) + ";" + String(DIR) + ";0";
         char message_out[64];
         message.toCharArray(message_out, 64);
-        // calculate the length of the string to be sent
         int stringlength = strlen(message_out);
-        //-- who is going to receive our messages?
         connection.receiverID = 107;
-        uint8_t prevSize = 0;
-        while (Serial.available() != prevSize) {
-            prevSize == Serial.available();
-            delayMicroseconds(serialWaitTime);
-        }
+        // uint8_t prevSize = 0;
+        // while (Serial.available() != prevSize) {
+        //     prevSize == Serial.available();
+        //     delayMicroseconds(serialWaitTime);
+        // }
         IPControl_Write(&connection, message_out, stream, stringlength);
     }
 }
