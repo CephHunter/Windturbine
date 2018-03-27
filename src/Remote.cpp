@@ -55,6 +55,7 @@ double battery_voltage = 0;
 double output_current = 0;
 double WSpeed = 0;
 double turbineRPM = 0;
+uint16_t displayCounter = 0;
 
 // ---------------------------
 //      Declare functions
@@ -100,6 +101,7 @@ void loop() {
         char* strpart = strtok(receiveData, ";");
         while (strpart != NULL) {
             data[counter] = stringToDouble(strpart);
+            // Serial.println(data[counter]);
             strpart = strtok(NULL, ";");
             counter += 1;
         }
@@ -114,21 +116,24 @@ void loop() {
         // -----------------------------
         //      Display data on LCD
         // -----------------------------
-        // lcd.setCursor(0,0);
-        // lcd.print(addTrailingSpaces("U1:" + String(turbine_voltage), 9));
-        // lcd.setCursor(9,0);
-        // lcd.print(addTrailingSpaces("I1:" + String(turbine_current), 7));
-        // lcd.setCursor(0,1);
-        // lcd.print(addTrailingSpaces("U2:" + String(battery_voltage), 9));
-        // lcd.setCursor(9,1);
-        // lcd.print(addTrailingSpaces("I2:" + String(output_current), 7));
-
-        lcd.setCursor(0,0);
-        lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
-        lcd.setCursor(8,0);
-        lcd.print(addTrailingSpaces("P:" + String(turbine_voltage * turbine_current), 8));
-        lcd.setCursor(0,1);
-        lcd.print(addTrailingSpaces("RPM:" + String(turbineRPM)));
+        // if (displayCounter++ % 2 == 0) {
+            lcd.setCursor(0,0);
+            lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
+            lcd.setCursor(9,0);
+            lcd.print(addTrailingSpaces("P:" + String(turbine_voltage * turbine_current), 8));
+            lcd.setCursor(0,1);
+            lcd.print(addTrailingSpaces("RPM:" + String(turbineRPM)));
+        // } else {
+        //     lcd.setCursor(0,0);
+        //     lcd.print(addTrailingSpaces("U1:" + String(turbine_voltage), 9));
+        //     lcd.setCursor(9,0);
+        //     lcd.print(addTrailingSpaces("I1:" + String(turbine_current), 7));
+        //     lcd.setCursor(0,1);
+        //     lcd.print(addTrailingSpaces("U2:" + String(battery_voltage), 9));
+        //     lcd.setCursor(9,1);
+        //     lcd.print(addTrailingSpaces("I2:" + String(output_current), 7));
+        // }
+        
     }
 
     if (millis() - prevtime > 350) {

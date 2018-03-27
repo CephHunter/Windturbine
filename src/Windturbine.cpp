@@ -193,9 +193,9 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(sense_turbine), turbineInterrupt, RISING );
 
     //---- Open the brake ----//
-    while (brakeStatus == 1) {
-        openBrake();
-    }
+    // while (brakeStatus == 1) {
+    //     openBrake();
+    // }
 }
 
 // --------------
@@ -256,6 +256,7 @@ void loop() {
                     char* strpart = strtok(receiveData, ";");
                     while (strpart != NULL) {
                         data[counter] = stringToInt(strpart);
+                        Serial.println(data[counter]);
                         strpart = strtok(NULL, ";");
                         counter += 1;
                     }
@@ -273,6 +274,7 @@ void loop() {
                     }
 
                     int speed = data[0] * stepperPotValueMultiplier;
+                    Serial.println("speed"+String(speed));
                     tone(Stepper_CLK, speed);
 
                     if (data[1] == 1) {
@@ -302,31 +304,31 @@ void loop() {
     // ===========================
     //      Selfstart turbine
     // ===========================
-    if (allowSelfStart == 1) {
-        if (WSpeed >= windSpeedThresholdToStartTurbine) {
-            if(startTimeOfGoodWind == 0) startTimeOfGoodWind = millis();
-        } else {
-            startTimeOfGoodWind = 0;
-        }
+    // if (allowSelfStart == 1) {
+    //     if (WSpeed >= windSpeedThresholdToStartTurbine) {
+    //         if(startTimeOfGoodWind == 0) startTimeOfGoodWind = millis();
+    //     } else {
+    //         startTimeOfGoodWind = 0;
+    //     }
 
-        if (millis() - startTimeOfGoodWind >= windSpeedThresholdTimeToStartTurbine) {
-            turbineBoostStatus = 1;
-        }
-    }
+    //     if (millis() - startTimeOfGoodWind >= windSpeedThresholdTimeToStartTurbine) {
+    //         turbineBoostStatus = 1;
+    //     }
+    // }
 
     // =========================================
     //      Control turbine boost and brake
     // =========================================
-    switch (brakeStepperStatus) {
-        case 1:
-            closeBrake();
-            break;
-        case 2:
-            openBrake();
-            break;
-    }
-    if (stopTurbineStatus == 1) stopTurbine();
-    if (turbineBoostStatus == 1) startTurbine();
+    // switch (brakeStepperStatus) {
+    //     case 1:
+    //         closeBrake();
+    //         break;
+    //     case 2:
+    //         openBrake();
+    //         break;
+    // }
+    // if (stopTurbineStatus == 1) stopTurbine();
+    // if (turbineBoostStatus == 1) startTurbine();
 
 
     // ======================

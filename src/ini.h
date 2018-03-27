@@ -1,6 +1,7 @@
 #include <arduino.h>
 
-const uint16_t tickLength = 1000;     // Display update rate in ms
+const uint16_t tickLength = 1000;       // Data measure/process rate in ms (Windturbine.cpp)
+const uint16_t tickLength2 = 350;       // Data measure/process rate in ms (Remote.cpp)
 const uint8_t WindSpeedToFillBar = 15;   // m/s
 const double max_battery_charge_current = 2.1;
 const double battery_float_charge_current = 0.7;
@@ -18,7 +19,7 @@ const uint8_t stepperDIRvalToCloseBrake = 1;
 const uint8_t stepperDIRvalToBoostTurbine = 1;
 const uint8_t stepperValToEnable = 0;
 const uint8_t stepperENminPotValue = 3;
-const uint8_t stepperPotValueMultiplier = 30;
+const uint8_t stepperPotValueMultiplier = 1;
 const uint8_t generatorDriveSwitchValToActivate = 1;
 const uint8_t brakeSwitchValToActivate = 1;
 
