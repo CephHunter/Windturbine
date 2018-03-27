@@ -53,7 +53,7 @@ double turbine_voltage = 0;
 double turbine_current = 0;
 double battery_voltage = 0;
 double output_current = 0;
-double wSpeed = 0;
+double WSpeed = 0;
 double turbineRPM = 0;
 
 // ---------------------------
@@ -108,7 +108,7 @@ void loop() {
         turbine_current = data[1];
         battery_voltage = data[2];
         output_current  = data[3];
-        wSpeed = data[4];
+        WSpeed = data[4];
         turbineRPM = (int)data[5];
 
         // -----------------------------
@@ -124,7 +124,7 @@ void loop() {
         // lcd.print(addTrailingSpaces("I2:" + String(output_current), 7));
 
         lcd.setCursor(0,0);
-        lcd.print(addTrailingSpaces("V:" + String(wSpeed), 8));
+        lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
         lcd.setCursor(8,0);
         lcd.print(addTrailingSpaces("P:" + String(turbine_voltage * turbine_current), 8));
         lcd.setCursor(0,1);
