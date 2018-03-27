@@ -319,17 +319,8 @@ void loop() {
     // =========================================
     //      Control turbine boost and brake
     // =========================================
-    // switch (brakeStepperStatus) {
-    //     case 1:
-    //         closeBrake();
-    //         break;
-    //     case 2:
-    //         openBrake();
-    //         break;
-    // }
     // if (stopTurbineStatus == 1) stopTurbine();
     // if (turbineBoostStatus == 1) startTurbine();
-
 
     // ======================
     //      Process data
@@ -519,6 +510,7 @@ void openBrake(uint32_t &startTime) {
     digitalWrite(Stepper_DIR, !stepperDIRvalToCloseBrake);
     digitalWrite(Stepper_EN, stepperValToEnable);
     freqSweep(sweepStartSpeed, brakeOpeningSpeed, startTime, brakeSpeedSweepTime);
+    brakeStepperStatus = 2;
     return;
 }
 
@@ -529,6 +521,7 @@ void closeBrake(uint32_t &startTime) {
     digitalWrite(Stepper_DIR, stepperDIRvalToCloseBrake);
     digitalWrite(Stepper_EN, stepperValToEnable);
     freqSweep(sweepStartSpeed, brakeClosingSpeed, startTime, brakeSpeedSweepTime);
+    brakeStepperStatus = 1;
 
     uint16_t usedPulses = pulsesUsed(startTime, sweepStartSpeed, brakeClosingSpeed, brakeSpeedSweepTime);
     
