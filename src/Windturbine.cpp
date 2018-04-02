@@ -105,6 +105,8 @@ uint8_t brakeStatus = 1;            // 0 == open, 1 == closed
 uint8_t brakeStepperStatus = 0;     // 0 == do nothing, 1 == close brake, 2 == open brake
 uint8_t stopTurbineStatus = 0;      // 0 == do nothing, 1 == bring turbine to a complete stop
 uint8_t turbineBoostStatus = 0;     // 0 == do nothing, 1 == boost turbine
+uint8_t dummyLoadStatus = 0;
+uint8_t batteryOutputStatus = 0;
 //---- Time keeping variables ----//
 uint32_t preTime = 0;               // Used to periodicly run a codeblock
 uint32_t curTime = 0;               // ^     
@@ -177,7 +179,7 @@ void setup() {
     myFile.println("---------------------------------");
     myFile.println("            New Log");
     myFile.println("---------------------------------");
-    myFile.println("time;unix time;turbine_status;brakeStepperStatus;turbine_voltage;turbine_current;battery_voltage;output_current;WSpeed;turbineRPM;generatedPower;battery_SOC");
+    myFile.println("time;unixTime;turbine_voltage;turbine_current;battery_voltage;output_current;generatedPower;WSpeed;turbineRPM;turbine_status;brakeStatus;brakeStepperStatus;battery_SOC;stopTurbineStatus;turbineBoostStatus;stepperStartTime;startTimeOfGoodWind;current_manometer_count;current_turbine_count;turbine_to_bat_switch_pwm;dummyLoadStatus;batteryOutputStatus;");
     myFile.println("---------------------------------");
     myFile.close();
 
@@ -193,6 +195,7 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(sense_turbine), turbineInterrupt, RISING );
 
     //---- Open the brake ----//
+    // brakeStatus = 1;
     // while (brakeStatus == 1) {
     //     openBrake();
     // }
@@ -279,12 +282,16 @@ void loop() {
 
                     if (data[1] == 1) {
                         digitalWrite(generator_drive_switch, generatorDriveSwitchValToActivate);
+                        // turbineBoostStatus = 1;
+                        // stopTurbineStatus = 0;
                     } else {
                         digitalWrite(generator_drive_switch, !generatorDriveSwitchValToActivate);
                     }
 
                     if (data[2] == 1 && !(digitalRead(brake_limit_switch) == HIGH && data[3] == 0)) {
                         digitalWrite(brake_switch, brakeSwitchValToActivate);
+                        // turbineBoostStatus = 0;
+                        // stopTurbineStatus = 1;
                     } else {
                         digitalWrite(brake_switch, !brakeSwitchValToActivate);
                     }
@@ -304,23 +311,23 @@ void loop() {
     // ===========================
     //      Selfstart turbine
     // ===========================
-    // if (allowSelfStart == 1) {
-    //     if (WSpeed >= windSpeedThresholdToStartTurbine) {
-    //         if(startTimeOfGoodWind == 0) startTimeOfGoodWind = millis();
-    //     } else {
-    //         startTimeOfGoodWind = 0;
-    //     }
+    if (allowSelfStart == 1) {
+        if (WSpeed >= windSpeedThresholdToStartTurbine) {
+            if(startTimeOfGoodWind == 0) startTimeOfGoodWind = millis();
+        } else {
+            startTimeOfGoodWind = 0;
+        }
 
-    //     if (millis() - startTimeOfGoodWind >= windSpeedThresholdTimeToStartTurbine) {
-    //         turbineBoostStatus = 1;
-    //     }
-    // }
+        if (millis() - startTimeOfGoodWind >= windSpeedThresholdTimeToStartTurbine) {
+            turbineBoostStatus = 1;
+        }
+    }
 
     // =========================================
     //      Control turbine boost and brake
     // =========================================
-    // if (stopTurbineStatus == 1) stopTurbine();
-    // if (turbineBoostStatus == 1) startTurbine();
+    if (stopTurbineStatus == 1) stopTurbine();
+    if (turbineBoostStatus == 1) startTurbine();
 
     // ======================
     //      Process data
@@ -378,7 +385,7 @@ void loop() {
         if (battery_voltage < battery_max_idle_voltage) {
             target_battery_current = max_battery_charge_current;
         }
-    
+
         //---- Limit turbine current ----//
         if (battery_voltage < max_voltage) {
             digitalWrite(dummy_load_switch, LOW);
@@ -400,16 +407,20 @@ void loop() {
             //---- Manage dummy load ----//
             if (turbine_voltage > max_voltage) {
                 digitalWrite(dummy_load_switch, HIGH);
+                dummyLoadStatus = 1;
             } else {
                 digitalWrite(dummy_load_switch, LOW);
+                dummyLoadStatus = 0;
             }
         }
 
         //---- Manage output ----//
         if (battery_voltage > min_voltage) {
             digitalWrite(battery_output_switch, HIGH);
+            batteryOutputStatus = 1;
         } else {
             digitalWrite(battery_output_switch, LOW);
+            batteryOutputStatus = 0;
         }
 
         //---- Get battery state of charge ----//
@@ -447,16 +458,26 @@ void loop() {
             myFile.println(
                 String(formatTime()) + ";" +
                 String(now()) + ";" +
-                String(turbine_status) + ";" +
-                String(brakeStepperStatus) + ";" +
                 String(turbine_voltage) + ";" +
                 String(turbine_current) + ";" +
                 String(battery_voltage) + ";" +
                 String(output_current ) + ";" +
+                String(generatedPower) + ";" +
                 String(WSpeed) + ";" +
                 String(turbineRPM) + ";" +
-                String(generatedPower) + ";" +
-                String(battery_SOC) + ";"
+                String(turbine_status) + ";" +
+                String(brakeStatus) + ";" +
+                String(brakeStepperStatus) + ";" +
+                String(battery_SOC) + ";" +
+                String(stopTurbineStatus) + ";" +
+                String(turbineBoostStatus) + ";" +
+                String(stepperStartTime) + ";" +
+                String(startTimeOfGoodWind) + ";" +
+                String(current_manometer_count) + ";" +
+                String(current_turbine_count) + ";" +
+                String(turbine_to_bat_switch_pwm) + ";" +
+                String(dummyLoadStatus) + ";" +
+                String(batteryOutputStatus) + ";"
             );
         } else {
             Serial.print("error opening ");
