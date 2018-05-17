@@ -60,6 +60,7 @@ uint16_t displayCounter = 0;
 // ---------------------------
 //      Declare functions
 // ---------------------------
+void sendRFMessage(String message, int rID);
 
 // ---------------
 //      Setup
@@ -159,17 +160,8 @@ void loop() {
         // ======================
         //      Send RF data
         // ======================
-        String message = String(potValue) + ";" + String(drive) + ";" + String(brake) + ";" + String(DIR) + ";0";
-        char message_out[64];
-        message.toCharArray(message_out, 64);
-        int stringlength = strlen(message_out);
-        connection.receiverID = 107;
-        // uint8_t prevSize = 0;
-        // while (Serial.available() != prevSize) {
-        //     prevSize == Serial.available();
-        //     delayMicroseconds(serialWaitTime);
-        // }
-        IPControl_Write(&connection, message_out, stream, stringlength);
+        String message = String(potValue) + ";" + String(drive) + ";" + String(brake) + ";" + String(DIR) + ";1;0"; // "1;0" == Manual; "2;0" == auto functions
+        sendRFMessage(message, 107);
     }
 }
 
@@ -187,4 +179,12 @@ void UART_receive() {
         incomingByte = Serial.read();
         IP_BufferDataByte(incomingByte);
     }
+}
+
+void sendRFMessage(String message, int rID) {
+    char message_out[64];
+    message.toCharArray(message_out, 64);
+    int stringlength = strlen(message_out);
+    connection.receiverID = rID;
+    IPControl_Write(&connection, message_out, stream, stringlength);
 }

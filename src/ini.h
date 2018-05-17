@@ -15,31 +15,32 @@ const double bat_discharge_voltage_correction = -0.4;
 
 // const double mosfet_resistance = 0.2;
 
-const uint8_t stepperDIRvalToCloseBrake = 1;
+const uint8_t stepperDIRvalToCloseBrake = 0;
 const uint8_t stepperDIRvalToBoostTurbine = 1;
 const uint8_t stepperValToEnable = 0;
-const uint8_t stepperENminPotValue = 5;
-const uint8_t stepperPotValueMultiplier = 1;
+const uint8_t stepperENminPotValue = 2;
+const uint8_t stepperPotValueMultiplier = 13;
 const uint8_t generatorDriveSwitchValToActivate = 1;
 const uint8_t brakeSwitchValToActivate = 1;
 
-const uint8_t turbineEncoderTeeth = 40;    // number of teeth on the encode wheel
+const uint8_t turbineEncoderTeeth = 28;    // number of teeth on the encode wheel
 const uint8_t anemometerEncoderTeeth = 20;
 
 #define SDcardFileName "log.txt"
 
-const uint16_t serialWaitTime = 600; // microseconds
+// const uint16_t serialWaitTime = 600; // microseconds
 
 uint8_t allowSelfStart = 0;
-const uint8_t sweepStartSpeed = 40;         // pulses per second, 200 = 1 RPM (stepper)
-const uint16_t brakeOpeningSpeed = 600;     
-const uint16_t brakeClosingSpeed = 600;
-const uint16_t pulsesToCloseBrake = 3000;   // 200 = 1 rotation
-const uint16_t openBrakepulsesTimeout = 3000;
+const uint8_t sweepStartSpeed = 40;         // pulses per second, 1600 = 1 rotation
+const uint16_t brakeOpeningSpeed = 3200;
+const uint16_t brakeClosingSpeed = 3200;
+const uint16_t pulsesToCloseBrake = 8000;   // 1600 = 1 rotation
+const uint16_t openBrakepulsesTimeout = 16000;
 const uint16_t brakeSpeedSweepTime = 1000;      // Time to get from sweepStartSpeed to tartget speed in milliseconds
-const uint16_t turbineBoostSpeed = 30000;
+const uint16_t turbineBoostSpeed = 26600;
 const uint16_t turbineBoostSweepTime = 15000;
 
 const double windSpeedThresholdToStartTurbine = 4;  // m/s
 const uint16_t windSpeedThresholdTimeToStartTurbine = 10000; // #ms over windspeed treshold before turbine start
 const double maxAllowedTurbineRPM = 250;
+const double maxAllowedWinspeed = 10; // m/s

@@ -6,3 +6,4 @@ double roundDepth(double digit, int precision = 0);
 double stringToDouble(char* str);
 int stringToInt(char* str);
 uint32_t stringIdentifier(char* str);
+// void sendRFMessage(String message, int rID);

@@ -56,9 +56,21 @@ uint32_t stringIdentifier(char* str) {
     int stringlength = strlen(str);
     for (int pos = 0; pos < stringlength; pos++) {
         char strpart = str[pos];
-        res *= 10;
-        res += strpart;
+        if ((strpart >= 65 && strpart <= 90) || (strpart >= 97 && strpart <= 122)) {
+            res *= 10;
+            res += strpart;
+        } else {
+            return res;
+        }
     }
 
     return res;
 }
+
+// void sendRFMessage(String message, int rID) {
+//     char message_out[64];
+//     message.toCharArray(message_out, 64);
+//     int stringlength = strlen(message_out);
+//     connection.receiverID = rID;
+//     IPControl_Write(&connection, message_out, stream, stringlength);
+// }

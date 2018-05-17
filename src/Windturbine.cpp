@@ -71,8 +71,8 @@ File myFile;
 #define voltage_sense_turbine A3
 #define current_sense_output A0
 #define voltage_sense_battery A1
-#define turbine_to_bat_switch 4
-#define battery_output_switch 5
+#define turbine_to_bat_switch 5
+#define battery_output_switch 4
 #define dummy_load_switch 22
 #define Stepper_EN 23
 #define Stepper_DIR 24
@@ -133,6 +133,7 @@ void stopTurbine(uint32_t &startTime = stepperStartTime);
 void startTurbine(uint32_t &startTime = stepperStartTime);
 void disableStepper();
 uint16_t pulsesUsed(uint32_t startTime, uint16_t startSpeed, uint16_t endSpeed, uint16_t sweepTime);
+void sendRFMessage(String message, int rID);
 
 // ---------------
 //      Setup
@@ -225,17 +226,14 @@ void loop() {
     if (datalen > 0) {
         // Serial.println("");
         // Serial.println("RDATA:"+String(receiveData));
+        // Serial.println(stringIdentifier(receiveData));
         // Serial.println("");
 
         switch (stringIdentifier(receiveData)) {
             case 90748:     // SEND
                 {
                     String message = "3;" + String(turbineRPM) + ";" + String(WSpeed) + ";" + String(turbine_status) + ";" + String(generatedPower) + ";" + String(now());
-                    char message_out[64];
-                    message.toCharArray(message_out, 64);
-                    int stringlength = strlen(message_out);
-                    connection.receiverID = 1;
-                    IPControl_Write(&connection, message_out, stream, stringlength);
+                    sendRFMessage(message, 1);
                     break;
                 }
             case 921404:    // START
@@ -248,7 +246,9 @@ void loop() {
             case 92270:     // STOP
                 {
                     Serial.println("STOP");
+                    if (turbineBoostStatus == 1) stepperStartTime = 0;
                     stopTurbineStatus = 1;
+                    turbineBoostStatus = 0;
                     allowSelfStart = 0;
                     break;
                 }
@@ -264,36 +264,47 @@ void loop() {
                         counter += 1;
                     }
 
-                    if (data[3] == 1) {
-                        digitalWrite(Stepper_DIR, stepperDIRvalToCloseBrake);
-                    } else {
-                        digitalWrite(Stepper_DIR, !stepperDIRvalToCloseBrake);
+                    if (data[4] == 1) { // Manual control
+                        if (data[3] == 1) {
+                            digitalWrite(Stepper_DIR, stepperDIRvalToCloseBrake);
+                        } else {
+                            digitalWrite(Stepper_DIR, !stepperDIRvalToCloseBrake);
+                        }
+
+                        if (data[0] < stepperENminPotValue) {
+                            digitalWrite(Stepper_EN, !stepperValToEnable);
+                        } else {
+                            digitalWrite(Stepper_EN, stepperValToEnable);
+                        }
+
+                        int speed = data[0] * stepperPotValueMultiplier;
+                        Serial.println("speed"+String(speed));
+                        tone(Stepper_CLK, speed);
+
+                        if (data[1] == 1) {
+                            digitalWrite(generator_drive_switch, generatorDriveSwitchValToActivate);
+                        } else {
+                            digitalWrite(generator_drive_switch, !generatorDriveSwitchValToActivate);
+                        }
+
+                        if (data[2] == 1 && !(digitalRead(brake_limit_switch) == HIGH && data[3] == 0)) {
+                            digitalWrite(brake_switch, brakeSwitchValToActivate);
+                        } else {
+                            digitalWrite(brake_switch, !brakeSwitchValToActivate);
+                        }
                     }
 
-                    if (data[0] < stepperENminPotValue) {
-                        digitalWrite(Stepper_EN, !stepperValToEnable);
-                    } else {
-                        digitalWrite(Stepper_EN, stepperValToEnable);
-                    }
-
-                    int speed = data[0] * stepperPotValueMultiplier;
-                    Serial.println("speed"+String(speed));
-                    tone(Stepper_CLK, speed);
-
-                    if (data[1] == 1) {
-                        digitalWrite(generator_drive_switch, generatorDriveSwitchValToActivate);
-                        // turbineBoostStatus = 1;
-                        // stopTurbineStatus = 0;
-                    } else {
-                        digitalWrite(generator_drive_switch, !generatorDriveSwitchValToActivate);
-                    }
-
-                    if (data[2] == 1 && !(digitalRead(brake_limit_switch) == HIGH && data[3] == 0)) {
-                        digitalWrite(brake_switch, brakeSwitchValToActivate);
-                        // turbineBoostStatus = 0;
-                        // stopTurbineStatus = 1;
-                    } else {
-                        digitalWrite(brake_switch, !brakeSwitchValToActivate);
+                    if (data[4] == 2) { // control auto functions
+                        if (data[1] == 1 && data[3] == 1) {
+                            if (stopTurbineStatus == 1) stepperStartTime = 0;
+                            turbineBoostStatus = 1;
+                            stopTurbineStatus = 0;
+                        }
+                        if (data[1] == 0 && data[3] == 1) {
+                            if (turbineBoostStatus == 1) stepperStartTime = 0;
+                            turbineBoostStatus = 0;
+                            stopTurbineStatus = 1;
+                        }
                     }
                 }
         }
@@ -306,21 +317,6 @@ void loop() {
     if (digitalRead(brake_limit_switch) == HIGH && bitRead(PORTD, brake_switch) == brakeSwitchValToActivate && bitRead(PORTD, Stepper_DIR) == !stepperDIRvalToCloseBrake) {
         digitalWrite(brake_switch, LOW);
         disableStepper();
-    }
-
-    // ===========================
-    //      Selfstart turbine
-    // ===========================
-    if (allowSelfStart == 1) {
-        if (WSpeed >= windSpeedThresholdToStartTurbine) {
-            if(startTimeOfGoodWind == 0) startTimeOfGoodWind = millis();
-        } else {
-            startTimeOfGoodWind = 0;
-        }
-
-        if (millis() - startTimeOfGoodWind >= windSpeedThresholdTimeToStartTurbine) {
-            turbineBoostStatus = 1;
-        }
     }
 
     // =========================================
@@ -491,22 +487,33 @@ void loop() {
         String message = String(turbine_voltage) + ";" +
             String(turbine_current) + ";" + String(battery_voltage) + ";" + String(output_current) + ";" +
             String(WSpeed) + ";" + String(turbineRPM) + ";0";
-        char message_out[64];
-        message.toCharArray(message_out, 64);
-        int stringlength = strlen(message_out);
-        connection.receiverID = 108;
-        // uint8_t prevSize = 0;
-        // while (Serial3.available() != prevSize) {
-        //     prevSize == Serial3.available();
-        //     delayMicroseconds(serialWaitTime);
-        // }
-        IPControl_Write(&connection, message_out, stream, stringlength);
+        sendRFMessage(message, 108);
 
         // ------------------------------------
         //      Set turbine control values
         // ------------------------------------
         if (turbineRPM > 0) turbine_status = 1; else turbine_status = 0;
         
+        // if (allowSelfStart == 1 && stopTurbineStatus != 1 && WSpeed < maxAllowedWinspeed) {
+        //     if (WSpeed >= windSpeedThresholdToStartTurbine) {
+        //         if(startTimeOfGoodWind == 0) startTimeOfGoodWind = millis();
+        //     } else {
+        //         startTimeOfGoodWind = 0;
+        //     }
+
+        //     if (millis() - startTimeOfGoodWind >= windSpeedThresholdTimeToStartTurbine) {
+        //         if (stopTurbineStatus == 1) stepperStartTime = 0;
+        //         turbineBoostStatus = 1;
+        //         stopTurbineStatus = 0;
+        //     }
+        // }
+
+        // if (turbineRPM > maxAllowedTurbineRPM) {
+        //     if (turbineBoostStatus == 1) stepperStartTime = 0;
+        //     turbineBoostStatus = 0;
+        //     stopTurbineStatus = 1;
+        // }
+
     }
 }
 
@@ -710,4 +717,12 @@ void UART_receive() {
         incomingByte = Serial3.read();
         IP_BufferDataByte(incomingByte);
     }
+}
+
+void sendRFMessage(String message, int rID) {
+    char message_out[64];
+    message.toCharArray(message_out, 64);
+    int stringlength = strlen(message_out);
+    connection.receiverID = rID;
+    IPControl_Write(&connection, message_out, stream, stringlength);
 }
