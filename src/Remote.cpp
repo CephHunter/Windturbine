@@ -40,6 +40,7 @@ LiquidCrystal_I2C lcd(0x3F, 16, 2);
 #define driveSwitch A1
 #define brakeSwitch A2
 #define brakeDIR A3
+#define autoSelect 2
 
 // ----------------------------------
 //      Declare global variables
@@ -56,6 +57,7 @@ double output_current = 0;
 double WSpeed = 0;
 double turbineRPM = 0;
 uint16_t displayCounter = 0;
+int autosel = 1;
 
 // ---------------------------
 //      Declare functions
@@ -94,75 +96,87 @@ void loop() {
     UART_receive();
     int datalen = IPControl_Read(&connection, receiveData);
     if (datalen > 0) {
-        // Serial.println("\n");
-        // Serial.println("RDATA:"+String(receiveData));
-        // Serial.println("\n");
-        double data[10];
-        int counter = 0;
-        char* strpart = strtok(receiveData, ";");
-        while (strpart != NULL) {
-            data[counter] = stringToDouble(strpart);
-            // Serial.println(data[counter]);
-            strpart = strtok(NULL, ";");
-            counter += 1;
+        if (stringIdentifier(receiveData) == 90748) {
+            potValue = analogRead(POT);
+            if (digitalRead(driveSwitch) == HIGH) {
+                drive = 1;
+            } else {
+                drive = 0;
+            }
+            if (digitalRead(brakeSwitch) == HIGH) {
+                brake = 1;
+            } else {
+                brake = 0;
+            }
+            if (digitalRead(brakeDIR) == HIGH) {
+                DIR = 1;
+            } else {
+                DIR = 0;
+            }
+            if (digitalRead(autoSelect) == HIGH) {
+                autosel = 2;
+            } else {
+                autosel = 1;
+            }
+            // ======================
+            //      Send RF data
+            // ======================
+            String message = String(potValue) + ";" + String(drive) + ";" + String(brake) + ";" + String(DIR) + 
+                ";2;0"; // "1;0" == Manual; "2;0" == auto functions
+            sendRFMessage(message, 107);
+        } else {
+            
+            // Serial.println("\n");
+            // Serial.println("RDATA:"+String(receiveData));
+            // Serial.println("\n");
+            double data[10];
+            int counter = 0;
+            char* strpart = strtok(receiveData, ";");
+            while (strpart != NULL) {
+                data[counter] = stringToDouble(strpart);
+                // Serial.println(data[counter]);
+                strpart = strtok(NULL, ";");
+                counter += 1;
+            }
+
+            turbine_voltage = data[0];
+            turbine_current = data[1];
+            battery_voltage = data[2];
+            output_current  = data[3];
+            WSpeed = data[4];
+            turbineRPM = (int)data[5];
+
+            // -----------------------------
+            //      Display data on LCD
+            // -----------------------------
+            // if (displayCounter++ % 2 == 0) {
+                lcd.setCursor(0,0);
+                lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
+                // lcd.print(addTrailingSpaces("P:" + String(turbine_voltage * turbine_current), 8));
+                lcd.setCursor(8,0);
+                lcd.print(addTrailingSpaces("M:" + String(60.0*analogRead(POT)*stepperPotValueMultiplier/4800), 8));
+                lcd.setCursor(0,1);
+                lcd.print(addTrailingSpaces("RPM:" + String(turbineRPM)));
+                lcd.setCursor(11,1);
+                lcd.print(addTrailingSpaces(String(turbine_voltage * turbine_current), 8));
+            // } else {
+            //     lcd.setCursor(0,0);
+            //     lcd.print(addTrailingSpaces("U1:" + String(turbine_voltage), 9));
+            //     lcd.setCursor(9,0);
+            //     lcd.print(addTrailingSpaces("I1:" + String(turbine_current), 7));
+            //     lcd.setCursor(0,1);
+            //     lcd.print(addTrailingSpaces("U2:" + String(battery_voltage), 9));
+            //     lcd.setCursor(9,1);
+            //     lcd.print(addTrailingSpaces("I2:" + String(output_current), 7));
+            // }
         }
-
-        turbine_voltage = data[0];
-        turbine_current = data[1];
-        battery_voltage = data[2];
-        output_current  = data[3];
-        WSpeed = data[4];
-        turbineRPM = (int)data[5];
-
-        // -----------------------------
-        //      Display data on LCD
-        // -----------------------------
-        // if (displayCounter++ % 2 == 0) {
-            lcd.setCursor(0,0);
-            lcd.print(addTrailingSpaces("V:" + String(WSpeed), 8));
-            lcd.setCursor(9,0);
-            lcd.print(addTrailingSpaces("P:" + String(turbine_voltage * turbine_current), 8));
-            lcd.setCursor(0,1);
-            lcd.print(addTrailingSpaces("RPM:" + String(turbineRPM)));
-        // } else {
-        //     lcd.setCursor(0,0);
-        //     lcd.print(addTrailingSpaces("U1:" + String(turbine_voltage), 9));
-        //     lcd.setCursor(9,0);
-        //     lcd.print(addTrailingSpaces("I1:" + String(turbine_current), 7));
-        //     lcd.setCursor(0,1);
-        //     lcd.print(addTrailingSpaces("U2:" + String(battery_voltage), 9));
-        //     lcd.setCursor(9,1);
-        //     lcd.print(addTrailingSpaces("I2:" + String(output_current), 7));
-        // }
         
     }
 
-    if (millis() - prevtime > 350) {
-        prevtime = millis();
-
-        potValue = analogRead(POT);
-        if (digitalRead(driveSwitch) == HIGH) {
-            drive = 1;
-        } else {
-            drive = 0;
-        }
-        if (digitalRead(brakeSwitch) == HIGH) {
-            brake = 1;
-        } else {
-            brake = 0;
-        }
-        if (digitalRead(brakeDIR) == HIGH) {
-            DIR = 1;
-        } else {
-            DIR = 0;
-        }
-
-        // ======================
-        //      Send RF data
-        // ======================
-        String message = String(potValue) + ";" + String(drive) + ";" + String(brake) + ";" + String(DIR) + ";1;0"; // "1;0" == Manual; "2;0" == auto functions
-        sendRFMessage(message, 107);
-    }
+    // if (millis() - prevtime > 1000) {
+    //     prevtime = millis();
+        
+    // }
 }
 
 // --------------------------

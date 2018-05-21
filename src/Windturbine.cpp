@@ -65,12 +65,12 @@ File myFile;
 // interrupt pins: 2, 3, 18, 19, 20, 21
 // PWM pins: 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 44, 45, 46
 
-#define sense_manometer 2
-#define sense_turbine 3
-#define current_sense_turbine A2
-#define voltage_sense_turbine A3
-#define current_sense_output A0
-#define voltage_sense_battery A1
+#define sense_manometer 3
+#define sense_turbine 2
+#define current_sense_turbine A10
+#define voltage_sense_turbine A11
+#define current_sense_output A8
+#define voltage_sense_battery A9
 #define turbine_to_bat_switch 5
 #define battery_output_switch 4
 #define dummy_load_switch 22
@@ -127,10 +127,10 @@ double batteryChargeVoltageDrop(double currentIn, double currentOut);
 double batteryDischargeVoltageDrop(double currentIn, double currentOut);
 double calcBatterySOC(double batVoltage, double currentIn, double currentOut);
 void freqSweep(uint16_t startFreq, uint16_t endFreq, uint32_t startTime, uint16_t duration);
-void openBrake(uint32_t &startTime = stepperStartTime);
-void closeBrake(uint32_t &startTime = stepperStartTime);
-void stopTurbine(uint32_t &startTime = stepperStartTime);
-void startTurbine(uint32_t &startTime = stepperStartTime);
+void openBrake(uint32_t *startTime = &stepperStartTime);
+void closeBrake(uint32_t *startTime = &stepperStartTime);
+void stopTurbine(uint32_t *startTime = &stepperStartTime);
+void startTurbine(uint32_t *startTime = &stepperStartTime);
 void disableStepper();
 uint16_t pulsesUsed(uint32_t startTime, uint16_t startSpeed, uint16_t endSpeed, uint16_t sweepTime);
 void sendRFMessage(String message, int rID);
@@ -232,7 +232,19 @@ void loop() {
         switch (stringIdentifier(receiveData)) {
             case 90748:     // SEND
                 {
-                    String message = "3;" + String(turbineRPM) + ";" + String(WSpeed) + ";" + String(turbine_status) + ";" + String(generatedPower) + ";" + String(now());
+                    String message = "SEND";
+                    sendRFMessage(message, 108);
+                    // -------------------------------------------
+                    //      Send RF data to remote controller
+                    // -------------------------------------------
+                    message = String(turbine_voltage) + ";" +
+                        String(turbine_current) + ";" + String(battery_voltage) + ";" + String(output_current) + ";" +
+                        String(WSpeed) + ";" + String(turbineRPM) + ";0";
+                    sendRFMessage(message, 108);
+
+                    // message = "3;" + String(turbineRPM) + ";" + String(WSpeed) + ";" + String(turbine_status) + ";" + String(generatedPower) + ";" + String(now());
+                    message = "3;" + String(turbineRPM) + ";" + String(WSpeed) + ";" + String(turbine_status) + ";" + String(generatedPower) + ";0";
+
                     sendRFMessage(message, 1);
                     break;
                 }
@@ -259,16 +271,18 @@ void loop() {
                     char* strpart = strtok(receiveData, ";");
                     while (strpart != NULL) {
                         data[counter] = stringToInt(strpart);
-                        Serial.println(data[counter]);
+                        // Serial.println(data[counter]);
                         strpart = strtok(NULL, ";");
                         counter += 1;
                     }
 
                     if (data[4] == 1) { // Manual control
                         if (data[3] == 1) {
-                            digitalWrite(Stepper_DIR, stepperDIRvalToCloseBrake);
+                            if (data[1] == 1) digitalWrite(Stepper_DIR, stepperDIRvalToBoostTurbine);
+                            if (data[2] == 1) digitalWrite(Stepper_DIR, stepperDIRvalToCloseBrake);
                         } else {
-                            digitalWrite(Stepper_DIR, !stepperDIRvalToCloseBrake);
+                            if (data[1] == 1) digitalWrite(Stepper_DIR, !stepperDIRvalToBoostTurbine);
+                            if (data[2] == 1) digitalWrite(Stepper_DIR, !stepperDIRvalToCloseBrake);
                         }
 
                         if (data[0] < stepperENminPotValue) {
@@ -278,7 +292,7 @@ void loop() {
                         }
 
                         int speed = data[0] * stepperPotValueMultiplier;
-                        Serial.println("speed"+String(speed));
+                        // Serial.println("speed"+String(speed));
                         tone(Stepper_CLK, speed);
 
                         if (data[1] == 1) {
@@ -299,11 +313,13 @@ void loop() {
                             if (stopTurbineStatus == 1) stepperStartTime = 0;
                             turbineBoostStatus = 1;
                             stopTurbineStatus = 0;
+                            Serial.println("test1");
                         }
                         if (data[1] == 0 && data[3] == 1) {
                             if (turbineBoostStatus == 1) stepperStartTime = 0;
                             turbineBoostStatus = 0;
                             stopTurbineStatus = 1;
+                            Serial.println("test2");
                         }
                     }
                 }
@@ -314,7 +330,8 @@ void loop() {
     // =========================================================
     //      Control brake limit switch (for manual control)
     // =========================================================
-    if (digitalRead(brake_limit_switch) == HIGH && bitRead(PORTD, brake_switch) == brakeSwitchValToActivate && bitRead(PORTD, Stepper_DIR) == !stepperDIRvalToCloseBrake) {
+    if (digitalRead(brake_limit_switch) == HIGH && bitRead(PORTD, brake_switch) == brakeSwitchValToActivate && 
+        bitRead(PORTD, Stepper_DIR) == !stepperDIRvalToCloseBrake) {
         digitalWrite(brake_switch, LOW);
         disableStepper();
     }
@@ -330,7 +347,7 @@ void loop() {
     // ======================
     curTime = millis();
     if ((curTime - preTime) >= tickLength) {
-        Serial.println(formatTime());
+        // Serial.println(formatTime());
         // ---------------------------------
         //      Reset counter variables
         // ---------------------------------
@@ -364,6 +381,9 @@ void loop() {
         }
 
         turbineRPM = (int)(current_turbine_count * 60. / turbineEncoderTeeth * 1000 / tickLength);
+        // Serial.println("count:"+String(current_turbine_count));
+        // turbineRPM = current_turbine_count;
+        // Serial.println(current_turbine_count);
 
         if (turbine_status == 1) {
             generatedPower = turbine_voltage * turbine_current;
@@ -382,42 +402,44 @@ void loop() {
             target_battery_current = max_battery_charge_current;
         }
 
+        digitalWrite(dummy_load_switch, HIGH);
+        digitalWrite(turbine_to_bat_switch, HIGH);
         //---- Limit turbine current ----//
-        if (battery_voltage < max_voltage) {
-            digitalWrite(dummy_load_switch, LOW);
-            double battery_current_vs_target = turbine_current / target_battery_current;
+        // if (battery_voltage < max_voltage) {
+        //     digitalWrite(dummy_load_switch, LOW);
+        //     double battery_current_vs_target = turbine_current / target_battery_current;
 
-            if (battery_current_vs_target < bat_current_threshold) {
-                turbine_to_bat_switch_pwm = 255;
-            } else {
-                if (turbine_to_bat_switch_pwm == 0) {turbine_to_bat_switch_pwm = 1;}
-                turbine_to_bat_switch_pwm = clip(round(turbine_to_bat_switch_pwm / battery_current_vs_target), 0, 255);
-            }
+        //     if (battery_current_vs_target < bat_current_threshold) {
+        //         turbine_to_bat_switch_pwm = 255;
+        //     } else {
+        //         if (turbine_to_bat_switch_pwm == 0) {turbine_to_bat_switch_pwm = 1;}
+        //         turbine_to_bat_switch_pwm = clip(round(turbine_to_bat_switch_pwm / battery_current_vs_target), 0, 255);
+        //     }
 
-            analogWrite(turbine_to_bat_switch, turbine_to_bat_switch_pwm);
+        //     analogWrite(turbine_to_bat_switch, turbine_to_bat_switch_pwm);
 
-        } else {
-            digitalWrite(turbine_to_bat_switch, LOW);
-            turbine_to_bat_switch_pwm = 0;
+        // } else {
+        //     digitalWrite(turbine_to_bat_switch, LOW);
+        //     turbine_to_bat_switch_pwm = 0;
 
-            //---- Manage dummy load ----//
-            if (turbine_voltage > max_voltage) {
-                digitalWrite(dummy_load_switch, HIGH);
-                dummyLoadStatus = 1;
-            } else {
-                digitalWrite(dummy_load_switch, LOW);
-                dummyLoadStatus = 0;
-            }
-        }
+        //     //---- Manage dummy load ----//
+        //     if (turbine_voltage > max_voltage) {
+        //         digitalWrite(dummy_load_switch, HIGH);
+        //         dummyLoadStatus = 1;
+        //     } else {
+        //         digitalWrite(dummy_load_switch, LOW);
+        //         dummyLoadStatus = 0;
+        //     }
+        // }
 
         //---- Manage output ----//
-        if (battery_voltage > min_voltage) {
-            digitalWrite(battery_output_switch, HIGH);
-            batteryOutputStatus = 1;
-        } else {
-            digitalWrite(battery_output_switch, LOW);
-            batteryOutputStatus = 0;
-        }
+        // if (battery_voltage > min_voltage) {
+        //     digitalWrite(battery_output_switch, HIGH);
+        //     batteryOutputStatus = 1;
+        // } else {
+        //     digitalWrite(battery_output_switch, LOW);
+        //     batteryOutputStatus = 0;
+        // }
 
         //---- Get battery state of charge ----//
         battery_SOC = calcBatterySOC(battery_voltage, turbine_current, output_current);
@@ -481,38 +503,32 @@ void loop() {
         }
         myFile.close();
 
-        // -------------------------------------------
-        //      Send RF data to remote controller
-        // -------------------------------------------
-        String message = String(turbine_voltage) + ";" +
-            String(turbine_current) + ";" + String(battery_voltage) + ";" + String(output_current) + ";" +
-            String(WSpeed) + ";" + String(turbineRPM) + ";0";
-        sendRFMessage(message, 108);
+        
 
         // ------------------------------------
         //      Set turbine control values
         // ------------------------------------
         if (turbineRPM > 0) turbine_status = 1; else turbine_status = 0;
-        
-        // if (allowSelfStart == 1 && stopTurbineStatus != 1 && WSpeed < maxAllowedWinspeed) {
-        //     if (WSpeed >= windSpeedThresholdToStartTurbine) {
-        //         if(startTimeOfGoodWind == 0) startTimeOfGoodWind = millis();
-        //     } else {
-        //         startTimeOfGoodWind = 0;
-        //     }
 
-        //     if (millis() - startTimeOfGoodWind >= windSpeedThresholdTimeToStartTurbine) {
-        //         if (stopTurbineStatus == 1) stepperStartTime = 0;
-        //         turbineBoostStatus = 1;
-        //         stopTurbineStatus = 0;
-        //     }
-        // }
+        if (allowSelfStart == 1 && stopTurbineStatus != 1 && WSpeed < maxAllowedWinspeed) {
+            if (WSpeed >= windSpeedThresholdToStartTurbine) {
+                if(startTimeOfGoodWind == 0) startTimeOfGoodWind = millis();
+            }
 
-        // if (turbineRPM > maxAllowedTurbineRPM) {
-        //     if (turbineBoostStatus == 1) stepperStartTime = 0;
-        //     turbineBoostStatus = 0;
-        //     stopTurbineStatus = 1;
-        // }
+            if (millis() - startTimeOfGoodWind >= windSpeedThresholdTimeToStartTurbine) {
+                if (stopTurbineStatus == 1) stepperStartTime = 0;
+                turbineBoostStatus = 1;
+                stopTurbineStatus = 0;
+            }
+        } else {
+            startTimeOfGoodWind = 0;
+        }
+
+        if (turbineRPM > maxAllowedTurbineRPM) {
+            if (turbineBoostStatus == 1) stepperStartTime = 0;
+            turbineBoostStatus = 0;
+            stopTurbineStatus = 1;
+        }
 
     }
 }
@@ -520,39 +536,42 @@ void loop() {
 // -----------------------
 //      Brake control
 // -----------------------
-void openBrake(uint32_t &startTime) {
-    if(startTime == 0) startTime = millis();
+void openBrake(uint32_t *startTime) {
+    Serial.println("test3");
+    if(startTime == 0) *startTime = millis();
 
     if (digitalRead(brake_limit_switch) == HIGH ||
-    pulsesUsed(startTime, sweepStartSpeed, brakeOpeningSpeed, brakeSpeedSweepTime) > openBrakepulsesTimeout) 
+    pulsesUsed(*startTime, sweepStartSpeed, brakeOpeningSpeed, brakeSpeedSweepTime) > openBrakepulsesTimeout) 
     {
         disableStepper();
         digitalWrite(brake_switch, !brakeSwitchValToActivate);
-        startTime = 0;
+        *startTime = 0;
         brakeStatus = 0;
         brakeStepperStatus = 0;
         return;
     }
     
+    digitalWrite(generator_drive_switch, !generatorDriveSwitchValToActivate);
     digitalWrite(brake_switch, brakeSwitchValToActivate);
     digitalWrite(Stepper_DIR, !stepperDIRvalToCloseBrake);
     digitalWrite(Stepper_EN, stepperValToEnable);
-    freqSweep(sweepStartSpeed, brakeOpeningSpeed, startTime, brakeSpeedSweepTime);
+    freqSweep(sweepStartSpeed, brakeOpeningSpeed, *startTime, brakeSpeedSweepTime);
     brakeStepperStatus = 2;
     return;
 }
 
-void closeBrake(uint32_t &startTime) {
-    if(startTime == 0) startTime = millis();
+void closeBrake(uint32_t *startTime) {
+    Serial.println("test4");
+    if(*startTime == 0) *startTime = millis();
 
     digitalWrite(brake_switch, brakeSwitchValToActivate);
     digitalWrite(Stepper_DIR, stepperDIRvalToCloseBrake);
     digitalWrite(Stepper_EN, stepperValToEnable);
-    freqSweep(sweepStartSpeed, brakeClosingSpeed, startTime, brakeSpeedSweepTime);
+    freqSweep(sweepStartSpeed, brakeClosingSpeed, *startTime, brakeSpeedSweepTime);
     brakeStepperStatus = 1;
 
-    uint16_t usedPulses = pulsesUsed(startTime, sweepStartSpeed, brakeClosingSpeed, brakeSpeedSweepTime);
-    
+    uint16_t usedPulses = pulsesUsed(*startTime, sweepStartSpeed, brakeClosingSpeed, brakeSpeedSweepTime);
+    Serial.println("pulsesUsed:" + usedPulses);
     if (usedPulses > pulsesToCloseBrake || brakeStatus == 1) {
         disableStepper();
         brakeStatus = 1;
@@ -562,15 +581,15 @@ void closeBrake(uint32_t &startTime) {
     return;
 }
 
-void stopTurbine(uint32_t &startTime) {
+void stopTurbine(uint32_t *startTime) {
     if (brakeStatus == 0) {
-        closeBrake(startTime);
+        closeBrake();
     }
 
     digitalWrite(brake_switch, brakeSwitchValToActivate);
     if (turbineRPM == 0) {
         digitalWrite(brake_switch, !brakeSwitchValToActivate);
-        startTime = 0;
+        *startTime = 0;
         stopTurbineStatus = 0;
         return;
     }
@@ -580,19 +599,23 @@ void stopTurbine(uint32_t &startTime) {
 // -------------------------------
 //      Turbine drive control
 // -------------------------------
-void startTurbine(uint32_t &startTime) {
-    openBrake(startTime);
+void startTurbine(uint32_t *startTime) {
+    if(*startTime == 0) *startTime = millis();
 
-    if(startTime == 0) startTime = millis();
-
-    if (brakeStatus == 0) {
+    if (brakeStatus == 1) {
+        openBrake();
+    } else {
+        Serial.println("test5");
+        Serial.println(millis() - *startTime);
+        digitalWrite(brake_switch, !brakeSwitchValToActivate);
         digitalWrite(generator_drive_switch, generatorDriveSwitchValToActivate);
         digitalWrite(Stepper_DIR, stepperDIRvalToBoostTurbine);
         digitalWrite(Stepper_EN, stepperValToEnable);
-        freqSweep(sweepStartSpeed, turbineBoostSpeed, startTime, turbineBoostSweepTime);
-        if (millis() - startTime > turbineBoostSweepTime) {
+        freqSweep(sweepStartSpeed, turbineBoostSpeed, *startTime, turbineBoostSweepTime);
+        if (millis() - *startTime > turbineBoostSweepTime) {
             disableStepper();
-            startTime = 0;
+            digitalWrite(generator_drive_switch, !generatorDriveSwitchValToActivate);
+            *startTime = 0;
             turbineBoostStatus = 0;
             return;
         } 
@@ -612,9 +635,10 @@ void disableStepper() {
 //      Helper functions
 // --------------------------
 void freqSweep(uint16_t startFreq, uint16_t endFreq, uint32_t startTime, uint16_t duration) {
-    double fraction = clip((millis() - startTime) * 1. / duration, 0, 1);
+    double fraction = clip(1.0 * (millis() - startTime) / duration, 0, 1);
     uint16_t currentFreq = (endFreq - startFreq) * fraction + startFreq;
     tone(Stepper_CLK, currentFreq);
+    Serial.println("freq:" + String(currentFreq));
 }
 
 uint16_t pulsesUsed(uint32_t startTime, uint16_t startSpeed, uint16_t endSpeed, uint16_t sweepTime) {
