@@ -57,7 +57,6 @@ double output_current = 0;
 double WSpeed = 0;
 double turbineRPM = 0;
 uint16_t displayCounter = 0;
-int autosel = 1;
 
 // ---------------------------
 //      Declare functions
@@ -113,16 +112,11 @@ void loop() {
             } else {
                 DIR = 0;
             }
-            if (digitalRead(autoSelect) == HIGH) {
-                autosel = 2;
-            } else {
-                autosel = 1;
-            }
             // ======================
             //      Send RF data
             // ======================
             String message = String(potValue) + ";" + String(drive) + ";" + String(brake) + ";" + String(DIR) + 
-                ";2;0"; // "1;0" == Manual; "2;0" == auto functions
+                ";"+ String(autoOrManualSelect) + ";0"; // "1;0" == Manual; "2;0" == auto functions
             sendRFMessage(message, 107);
         } else {
             
@@ -158,7 +152,7 @@ void loop() {
                 lcd.setCursor(0,1);
                 lcd.print(addTrailingSpaces("RPM:" + String(turbineRPM)));
                 lcd.setCursor(11,1);
-                lcd.print(addTrailingSpaces(String(turbine_voltage * turbine_current), 8));
+                lcd.print(addTrailingSpaces(String(20.0 * turbine_current * turbine_current), 8));
             // } else {
             //     lcd.setCursor(0,0);
             //     lcd.print(addTrailingSpaces("U1:" + String(turbine_voltage), 9));
@@ -173,10 +167,31 @@ void loop() {
         
     }
 
-    // if (millis() - prevtime > 1000) {
-    //     prevtime = millis();
-        
-    // }
+    if (millis() - prevtime > 1000 && selfSend) {
+        prevtime = millis();
+        potValue = analogRead(POT);
+        if (digitalRead(driveSwitch) == HIGH) {
+            drive = 1;
+        } else {
+            drive = 0;
+        }
+        if (digitalRead(brakeSwitch) == HIGH) {
+            brake = 1;
+        } else {
+            brake = 0;
+        }
+        if (digitalRead(brakeDIR) == HIGH) {
+            DIR = 1;
+        } else {
+            DIR = 0;
+        }
+        // ======================
+        //      Send RF data
+        // ======================
+        String message = String(potValue) + ";" + String(drive) + ";" + String(brake) + ";" + String(DIR) + 
+            ";" + String(autoOrManualSelect) + ";0"; // "1;0" == Manual; "2;0" == auto functions
+        sendRFMessage(message, 107);
+    }
 }
 
 // --------------------------
@@ -198,7 +213,7 @@ void UART_receive() {
 void sendRFMessage(String message, int rID) {
     char message_out[64];
     message.toCharArray(message_out, 64);
-    int stringlength = strlen(message_out);
+    int stringlength = strlen(message_out) + 1;
     connection.receiverID = rID;
     IPControl_Write(&connection, message_out, stream, stringlength);
 }

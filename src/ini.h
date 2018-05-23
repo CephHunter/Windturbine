@@ -31,16 +31,19 @@ const uint8_t anemometerEncoderTeeth = 20;
 // const uint16_t serialWaitTime = 600; // microseconds
 
 uint8_t allowSelfStart = 0;
-const uint8_t sweepStartSpeed = 40;         // pulses per second, 1600 = 1 rotation
+const uint8_t sweepStartSpeed = 200;         // pulses per second, 1600 = 1 rotation
 const uint16_t brakeOpeningSpeed = 1600;
 const uint16_t brakeClosingSpeed = 1600;
 const uint16_t pulsesToCloseBrake = 11200;   // 1600 = 1 rotation
-const uint16_t openBrakepulsesTimeout = 13000;
+const uint16_t openBrakepulsesTimeout = 16000;
 const uint16_t brakeSpeedSweepTime = 1000;      // Time to get from sweepStartSpeed to tartget speed in milliseconds
 const uint16_t turbineBoostSpeed = 800;
-const uint16_t turbineBoostSweepTime = 15000;
+const uint32_t turbineBoostSweepTime = 180000;
 
 const double windSpeedThresholdToStartTurbine = 4;  // m/s
 const uint16_t windSpeedThresholdTimeToStartTurbine = 10000; // #ms over windspeed treshold before turbine start
-const double maxAllowedTurbineRPM = 250;
+const double maxAllowedTurbineRPM = 150;
 const double maxAllowedWinspeed = 10; // m/s
+
+bool selfSend = true;
+int autoOrManualSelect = 1;     // 1 == manual; 2 == auto

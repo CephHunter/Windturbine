@@ -79,7 +79,7 @@ File myFile;
 #define Stepper_CLK 6
 #define generator_drive_switch 25
 #define brake_switch 26
-#define brake_limit_switch 27
+#define brake_limit_switch 30
 
 // ----------------------------------
 //      Declare global variables
@@ -126,13 +126,13 @@ void turbineInterrupt();
 double batteryChargeVoltageDrop(double currentIn, double currentOut);
 double batteryDischargeVoltageDrop(double currentIn, double currentOut);
 double calcBatterySOC(double batVoltage, double currentIn, double currentOut);
-void freqSweep(uint16_t startFreq, uint16_t endFreq, uint32_t startTime, uint16_t duration);
+void freqSweep(uint16_t startFreq, uint16_t endFreq, uint32_t startTime, uint32_t duration);
 void openBrake(uint32_t *startTime = &stepperStartTime);
 void closeBrake(uint32_t *startTime = &stepperStartTime);
 void stopTurbine(uint32_t *startTime = &stepperStartTime);
 void startTurbine(uint32_t *startTime = &stepperStartTime);
 void disableStepper();
-uint16_t pulsesUsed(uint32_t startTime, uint16_t startSpeed, uint16_t endSpeed, uint16_t sweepTime);
+uint16_t pulsesUsed(uint32_t startTime, uint16_t startSpeed, uint16_t endSpeed, uint32_t sweepTime);
 void sendRFMessage(String message, int rID);
 
 // ---------------
@@ -154,7 +154,7 @@ void setup() {
     pinMode(generator_drive_switch, OUTPUT);
     pinMode(brake_switch, OUTPUT);
     pinMode(brake_limit_switch, INPUT);
-    Serial.begin(9600);
+    Serial.begin(115200);
     Serial3.begin(9600);
 
     //---- Initialize RF module ----// 
@@ -232,18 +232,21 @@ void loop() {
         switch (stringIdentifier(receiveData)) {
             case 90748:     // SEND
                 {
-                    String message = "SEND";
-                    sendRFMessage(message, 108);
-                    // -------------------------------------------
-                    //      Send RF data to remote controller
-                    // -------------------------------------------
-                    message = String(turbine_voltage) + ";" +
-                        String(turbine_current) + ";" + String(battery_voltage) + ";" + String(output_current) + ";" +
-                        String(WSpeed) + ";" + String(turbineRPM) + ";0";
-                    sendRFMessage(message, 108);
+                    String message;
+                    if(!selfSend) {
+                        message = "SEND";
+                        sendRFMessage(message, 108);
+                        // -------------------------------------------
+                        //      Send RF data to remote controller
+                        // -------------------------------------------
+                        message = String(turbine_voltage) + ";" +
+                            String(turbine_current) + ";" + String(battery_voltage) + ";" + String(output_current) + ";" +
+                            String(WSpeed) + ";" + String(turbineRPM) + ";0";
+                        sendRFMessage(message, 108);
+                    }
 
-                    // message = "3;" + String(turbineRPM) + ";" + String(WSpeed) + ";" + String(turbine_status) + ";" + String(generatedPower) + ";" + String(now());
-                    message = "3;" + String(turbineRPM) + ";" + String(WSpeed) + ";" + String(turbine_status) + ";" + String(generatedPower) + ";0";
+                    message = "3;" + String(turbineRPM) + ";" + String(WSpeed) + ";" + String(turbine_status) + ";" + String(generatedPower) + ";" + String(now());
+                    // message = "3;" + String(turbineRPM) + ";" + String(WSpeed) + ";" + String(turbine_status) + ";" + String(generatedPower) + ";0";
 
                     sendRFMessage(message, 1);
                     break;
@@ -303,7 +306,9 @@ void loop() {
 
                         if (data[2] == 1 && !(digitalRead(brake_limit_switch) == HIGH && data[3] == 0)) {
                             digitalWrite(brake_switch, brakeSwitchValToActivate);
+                            Serial.println("t1");
                         } else {
+                            Serial.println("t2");
                             digitalWrite(brake_switch, !brakeSwitchValToActivate);
                         }
                     }
@@ -385,25 +390,24 @@ void loop() {
         // turbineRPM = current_turbine_count;
         // Serial.println(current_turbine_count);
 
-        if (turbine_status == 1) {
-            generatedPower = turbine_voltage * turbine_current;
-        } else {
-            generatedPower = 0;
-        }
+        // if (turbine_status == 1) {
+            //generatedPower = turbine_voltage * turbine_current;
+            generatedPower = turbine_current * turbine_current * 20;
+        // } else {
+            // generatedPower = 0;
+        // }
 
         // --------------------------------
         //      Control battery charge
         // --------------------------------
         //---- Define regulator variables ----//
-        double max_voltage = battery_max_idle_voltage + batteryChargeVoltageDrop(turbine_current, output_current);
-        double min_voltage = battery_min_idle_voltage + batteryDischargeVoltageDrop(turbine_current, output_current);
-        double target_battery_current = battery_float_charge_current;
-        if (battery_voltage < battery_max_idle_voltage) {
-            target_battery_current = max_battery_charge_current;
-        }
+        // double max_voltage = battery_max_idle_voltage + batteryChargeVoltageDrop(turbine_current, output_current);
+        // double min_voltage = battery_min_idle_voltage + batteryDischargeVoltageDrop(turbine_current, output_current);
+        // double target_battery_current = battery_float_charge_current;
+        // if (battery_voltage < battery_max_idle_voltage) {
+        //     target_battery_current = max_battery_charge_current;
+        // }
 
-        digitalWrite(dummy_load_switch, HIGH);
-        digitalWrite(turbine_to_bat_switch, HIGH);
         //---- Limit turbine current ----//
         // if (battery_voltage < max_voltage) {
         //     digitalWrite(dummy_load_switch, LOW);
@@ -495,7 +499,11 @@ void loop() {
                 String(current_turbine_count) + ";" +
                 String(turbine_to_bat_switch_pwm) + ";" +
                 String(dummyLoadStatus) + ";" +
-                String(batteryOutputStatus) + ";"
+                String(batteryOutputStatus) + ";" + 
+                String(bitRead(PORTD, generator_drive_switch)) + ";" +
+                String(bitRead(PORTD, brake_switch)) + ";" +
+                String(bitRead(PORTD, Stepper_EN)) + ";" +
+                String(bitRead(PORTD, Stepper_DIR)) + ";"
             );
         } else {
             Serial.print("error opening ");
@@ -503,32 +511,40 @@ void loop() {
         }
         myFile.close();
 
-        
+        // -------------------------------------------
+        //      Send RF data to remote controller
+        // -------------------------------------------
+        if(selfSend) {
+            String message = String(turbine_voltage) + ";" +
+                String(turbine_current) + ";" + String(battery_voltage) + ";" + String(output_current) + ";" +
+                String(WSpeed) + ";" + String(turbineRPM) + ";0";
+            sendRFMessage(message, 108);
+        }
 
         // ------------------------------------
         //      Set turbine control values
         // ------------------------------------
         if (turbineRPM > 0) turbine_status = 1; else turbine_status = 0;
 
-        if (allowSelfStart == 1 && stopTurbineStatus != 1 && WSpeed < maxAllowedWinspeed) {
-            if (WSpeed >= windSpeedThresholdToStartTurbine) {
-                if(startTimeOfGoodWind == 0) startTimeOfGoodWind = millis();
-            }
+        // if (allowSelfStart == 1 && stopTurbineStatus != 1 && WSpeed < maxAllowedWinspeed) {
+        //     if (WSpeed >= windSpeedThresholdToStartTurbine) {
+        //         if(startTimeOfGoodWind == 0) startTimeOfGoodWind = millis();
+        //     }
 
-            if (millis() - startTimeOfGoodWind >= windSpeedThresholdTimeToStartTurbine) {
-                if (stopTurbineStatus == 1) stepperStartTime = 0;
-                turbineBoostStatus = 1;
-                stopTurbineStatus = 0;
-            }
-        } else {
-            startTimeOfGoodWind = 0;
-        }
+        //     if (millis() - startTimeOfGoodWind >= windSpeedThresholdTimeToStartTurbine) {
+        //         if (stopTurbineStatus == 1) stepperStartTime = 0;
+        //         turbineBoostStatus = 1;
+        //         stopTurbineStatus = 0;
+        //     }
+        // } else {
+        //     startTimeOfGoodWind = 0;
+        // }
 
-        if (turbineRPM > maxAllowedTurbineRPM) {
-            if (turbineBoostStatus == 1) stepperStartTime = 0;
-            turbineBoostStatus = 0;
-            stopTurbineStatus = 1;
-        }
+        // if (turbineRPM > maxAllowedTurbineRPM || WSpeed > maxAllowedWinspeed) {
+        //     if (turbineBoostStatus == 1) stepperStartTime = 0;
+        //     turbineBoostStatus = 0;
+        //     stopTurbineStatus = 1;
+        // }
 
     }
 }
@@ -571,7 +587,7 @@ void closeBrake(uint32_t *startTime) {
     brakeStepperStatus = 1;
 
     uint16_t usedPulses = pulsesUsed(*startTime, sweepStartSpeed, brakeClosingSpeed, brakeSpeedSweepTime);
-    Serial.println("pulsesUsed:" + usedPulses);
+    Serial.println("pulsesUsed:" + String(usedPulses));
     if (usedPulses > pulsesToCloseBrake || brakeStatus == 1) {
         disableStepper();
         brakeStatus = 1;
@@ -587,7 +603,7 @@ void stopTurbine(uint32_t *startTime) {
     }
 
     digitalWrite(brake_switch, brakeSwitchValToActivate);
-    if (turbineRPM == 0) {
+    if (turbineRPM == 0 && brakeStatus == 1) {
         digitalWrite(brake_switch, !brakeSwitchValToActivate);
         *startTime = 0;
         stopTurbineStatus = 0;
@@ -606,7 +622,6 @@ void startTurbine(uint32_t *startTime) {
         openBrake();
     } else {
         Serial.println("test5");
-        Serial.println(millis() - *startTime);
         digitalWrite(brake_switch, !brakeSwitchValToActivate);
         digitalWrite(generator_drive_switch, generatorDriveSwitchValToActivate);
         digitalWrite(Stepper_DIR, stepperDIRvalToBoostTurbine);
@@ -634,14 +649,14 @@ void disableStepper() {
 // --------------------------
 //      Helper functions
 // --------------------------
-void freqSweep(uint16_t startFreq, uint16_t endFreq, uint32_t startTime, uint16_t duration) {
+void freqSweep(uint16_t startFreq, uint16_t endFreq, uint32_t startTime, uint32_t duration) {
     double fraction = clip(1.0 * (millis() - startTime) / duration, 0, 1);
     uint16_t currentFreq = (endFreq - startFreq) * fraction + startFreq;
     tone(Stepper_CLK, currentFreq);
     Serial.println("freq:" + String(currentFreq));
 }
 
-uint16_t pulsesUsed(uint32_t startTime, uint16_t startSpeed, uint16_t endSpeed, uint16_t sweepTime) {
+uint16_t pulsesUsed(uint32_t startTime, uint16_t startSpeed, uint16_t endSpeed, uint32_t sweepTime) {
     uint32_t now = millis();
     uint16_t usedPulses = (map( clip(now - startTime, 0, sweepTime), 
         0, sweepTime, startSpeed, endSpeed ) + startSpeed) / 2
@@ -746,7 +761,7 @@ void UART_receive() {
 void sendRFMessage(String message, int rID) {
     char message_out[64];
     message.toCharArray(message_out, 64);
-    int stringlength = strlen(message_out);
+    int stringlength = strlen(message_out) + 1;
     connection.receiverID = rID;
     IPControl_Write(&connection, message_out, stream, stringlength);
 }
